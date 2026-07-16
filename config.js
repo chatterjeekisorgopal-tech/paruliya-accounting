@@ -10,7 +10,7 @@ const CONFIG = {
   CENTER_NAME_SHORT: "Paruliya YCTC",
 
   // Paste your Google Apps Script Web App URL here after deployment (Step 2)
-  WEB_APP_URL: https://script.google.com/macros/s/AKfycbzTxTf4ycqkKq-RPDaR3ebU1q_ju6UlqvKTH5-oE73FKXcVY8HfEOkeeq7KFt9RyJoWnw/exec,
+  WEB_APP_URL: "https://script.google.com/macros/s/AKfycbzTxTf4ycqkKq-RPDaR3ebU1q_ju6UlqvKTH5-oE73FKXcVY8HfEOkeeq7KFt9RyJoWnw/exec",
 
   COURSES: [
     "CITA",
