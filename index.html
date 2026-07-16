@@ -490,7 +490,7 @@
 </main>
 
 <footer>
-  Powered by CONFIG.CENTER_NAME_SHORT — Daily Bill-wise Accounting System
+  Powered by <span id="footerCenterName">Center</span> — Daily Bill-wise Accounting System
 </footer>
 
 <script src="config.js"></script>
@@ -509,6 +509,7 @@
     $("expCategory").innerHTML = CONFIG.EXPENSE_CATEGORIES.map(c => `<option value="${c}">${c}</option>`).join("");
     $("centerName").textContent = CONFIG.CENTER_NAME;
     $("centerNameShort").textContent = CONFIG.CENTER_NAME_SHORT;
+    $("footerCenterName").textContent = CONFIG.CENTER_NAME_SHORT;
   }
 
   function apiUrl(params) {
@@ -750,6 +751,13 @@
 
   // ---------- INIT ----------
   async function init() {
+    if (typeof CONFIG === "undefined") {
+      document.body.innerHTML = `<div style="padding:40px;font-family:sans-serif;color:#A13D3D;">
+        <h2>config.js did not load</h2>
+        <p>Check that a file named exactly <b>config.js</b> (not config(1).js or similar) exists in the same GitHub folder as index.html.</p>
+      </div>`;
+      return;
+    }
     populateDropdowns();
     $("ledgerDate").value = todayStr();
     $("reportFrom").value = todayStr();
