@@ -1,0 +1,764 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Daily Accounting Ledger</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:opsz,wght@6..72,400;6..72,600&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --ink: #1B2A4A;
+    --ink-soft: #3B4A6B;
+    --paper: #F5F0E3;
+    --paper-line: #E3DCC8;
+    --rule-red: #A13D3D;
+    --gold: #9C7A28;
+    --positive: #2F6B4F;
+    --negative: #A13D3D;
+    --card-bg: #FFFDF8;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'Inter', sans-serif;
+    background:
+      repeating-linear-gradient(
+        to bottom,
+        var(--paper),
+        var(--paper) 34px,
+        var(--paper-line) 35px
+      );
+    color: var(--ink);
+    min-height: 100vh;
+    padding: 0 0 60px 0;
+  }
+
+  header {
+    background: var(--ink);
+    color: var(--paper);
+    padding: 28px 24px 22px;
+    border-bottom: 4px solid var(--gold);
+    position: relative;
+  }
+
+  header::before {
+    content: "";
+    position: absolute;
+    left: 48px;
+    top: 0;
+    bottom: 0;
+    width: 2px;
+    background: var(--rule-red);
+    opacity: 0.5;
+  }
+
+  .header-inner { max-width: 1100px; margin: 0 auto; padding-left: 24px; }
+
+  .eyebrow {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 12px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--gold);
+    margin-bottom: 6px;
+  }
+
+  h1 {
+    font-family: 'Newsreader', serif;
+    font-size: 30px;
+    font-weight: 600;
+    line-height: 1.3;
+  }
+
+  .center-sub { font-size: 13px; opacity: 0.65; margin-top: 4px; font-family: 'IBM Plex Mono', monospace; }
+
+  .date-row {
+    max-width: 1100px;
+    margin: 22px auto 0;
+    padding: 0 24px 0 48px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .date-row label { font-size: 14px; color: var(--ink-soft); font-weight: 600; }
+
+  input[type="date"] {
+    font-family: 'IBM Plex Mono', monospace;
+    padding: 8px 12px;
+    border: 1.5px solid var(--ink);
+    border-radius: 3px;
+    background: var(--card-bg);
+    font-size: 14px;
+    color: var(--ink);
+  }
+
+  main { max-width: 1100px; margin: 28px auto 0; padding: 0 24px 0 48px; }
+
+  h2.section-title {
+    font-family: 'Newsreader', serif;
+    font-size: 20px;
+    font-weight: 600;
+    color: var(--ink);
+    margin-bottom: 12px;
+  }
+
+  .summary-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 14px;
+    margin-bottom: 32px;
+  }
+
+  .summary-card {
+    background: var(--card-bg);
+    border: 1px solid var(--paper-line);
+    border-left: 3px solid var(--gold);
+    border-radius: 4px;
+    padding: 16px 18px;
+  }
+
+  .summary-card.net { border-left-color: var(--positive); }
+  .summary-card .label {
+    font-size: 12px;
+    color: var(--ink-soft);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    margin-bottom: 8px;
+  }
+  .summary-card .value {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 24px;
+    font-weight: 600;
+  }
+  .summary-card.net .value.positive { color: var(--positive); }
+  .summary-card.net .value.negative { color: var(--negative); }
+
+  /* ---- REPORT SECTION ---- */
+  .report-section {
+    background: var(--card-bg);
+    border: 1px solid var(--paper-line);
+    border-radius: 4px;
+    margin-bottom: 32px;
+    overflow: hidden;
+  }
+  .panel-header {
+    font-family: 'Newsreader', serif;
+    font-size: 19px;
+    font-weight: 600;
+    padding: 14px 18px;
+    background: var(--ink);
+    color: var(--paper);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .panel-header span.count { font-family: 'IBM Plex Mono', monospace; font-size: 12px; color: var(--gold); }
+
+  .report-controls {
+    padding: 16px 18px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    align-items: flex-end;
+    border-bottom: 1px dashed var(--paper-line);
+  }
+  .report-controls .field label { font-size: 12.5px; color: var(--ink-soft); font-weight: 600; display: block; margin-bottom: 4px; }
+  .preset-buttons { display: flex; gap: 6px; }
+  .preset-buttons button {
+    background: #EFE9D8;
+    color: var(--ink);
+    border: 1px solid #C9C0A8;
+    padding: 8px 10px;
+    font-size: 12.5px;
+    border-radius: 3px;
+    cursor: pointer;
+    font-family: 'Inter', sans-serif;
+    font-weight: 600;
+  }
+  .preset-buttons button:hover { background: #E3DCC8; }
+  #generateReportBtn {
+    background: var(--rule-red);
+    color: #fff;
+    border: none;
+    padding: 9px 16px;
+    border-radius: 3px;
+    font-weight: 600;
+    font-size: 14px;
+    cursor: pointer;
+  }
+  #generateReportBtn:hover { filter: brightness(1.08); }
+
+  .report-body { padding: 18px; }
+  .report-summary-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 12px;
+    margin-bottom: 18px;
+  }
+
+  details.report-detail { margin-top: 14px; }
+  details.report-detail summary {
+    cursor: pointer;
+    font-weight: 600;
+    font-size: 13.5px;
+    color: var(--ink-soft);
+    padding: 8px 0;
+  }
+
+  .panels { display: grid; grid-template-columns: 1.15fr 0.85fr; gap: 20px; align-items: start; }
+
+  .panel {
+    background: var(--card-bg);
+    border: 1px solid var(--paper-line);
+    border-radius: 4px;
+    overflow: hidden;
+  }
+
+  form { padding: 16px 18px; border-bottom: 1px dashed var(--paper-line); display: grid; gap: 10px; }
+
+  .field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+
+  label { font-size: 12.5px; color: var(--ink-soft); font-weight: 600; display: block; margin-bottom: 4px; }
+
+  input, select {
+    width: 100%;
+    padding: 9px 10px;
+    border: 1.3px solid #C9C0A8;
+    border-radius: 3px;
+    font-size: 14px;
+    font-family: 'Inter', sans-serif;
+    background: #fff;
+  }
+  input:focus, select:focus { outline: 2px solid var(--gold); outline-offset: 1px; border-color: var(--gold); }
+
+  button {
+    font-family: 'Inter', sans-serif;
+    font-weight: 600;
+    font-size: 14.5px;
+    padding: 10px 14px;
+    background: var(--rule-red);
+    color: #fff;
+    border: none;
+    border-radius: 3px;
+    cursor: pointer;
+    transition: filter 0.15s;
+  }
+  button:hover { filter: brightness(1.08); }
+  button:disabled { opacity: 0.55; cursor: not-allowed; }
+
+  .table-wrap { max-height: 340px; overflow-y: auto; }
+  table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+  thead th {
+    position: sticky; top: 0;
+    background: #EFE9D8;
+    text-align: left;
+    padding: 8px 10px;
+    font-size: 11.5px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--ink-soft);
+    border-bottom: 2px solid var(--gold);
+  }
+  tbody td { padding: 8px 10px; border-bottom: 1px solid var(--paper-line); }
+  tbody tr:hover { background: #FBF8EF; }
+  td.amount, th.amount { font-family: 'IBM Plex Mono', monospace; text-align: right; }
+  .empty-row td { text-align: center; color: #999; padding: 24px 10px; font-style: italic; }
+
+  .missing-flag {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px;
+    color: var(--negative);
+    background: #FBEAEA;
+    padding: 2px 6px;
+    border-radius: 2px;
+    margin-left: 6px;
+  }
+
+  .status-msg { font-size: 12.5px; margin-top: 2px; min-height: 16px; }
+  .status-msg.ok { color: var(--positive); }
+  .status-msg.err { color: var(--negative); }
+
+  footer {
+    max-width: 1100px; margin: 40px auto 0; padding: 0 24px 0 48px;
+    font-size: 11.5px; color: var(--ink-soft); font-family: 'IBM Plex Mono', monospace;
+  }
+
+  @media (max-width: 860px) {
+    .panels { grid-template-columns: 1fr; }
+    .summary-grid, .report-summary-grid { grid-template-columns: repeat(2, 1fr); }
+    .field-row { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="header-inner">
+    <div class="eyebrow">Daily Ledger · Accounting System</div>
+    <h1 id="centerName">Center Name</h1>
+    <div class="center-sub" id="centerNameShort">Center</div>
+  </div>
+  <div class="date-row">
+    <label for="ledgerDate">Date</label>
+    <input type="date" id="ledgerDate">
+  </div>
+</header>
+
+<main>
+
+  <h2 class="section-title">Today's Summary</h2>
+  <section class="summary-grid">
+    <div class="summary-card">
+      <div class="label">Total Bills</div>
+      <div class="value" id="sumBillCount">0</div>
+    </div>
+    <div class="summary-card">
+      <div class="label">Gross Collection</div>
+      <div class="value" id="sumGross">₹0</div>
+    </div>
+    <div class="summary-card">
+      <div class="label">Total Expense</div>
+      <div class="value" id="sumExpense">₹0</div>
+    </div>
+    <div class="summary-card net">
+      <div class="label">Net Collection</div>
+      <div class="value positive" id="sumNet">₹0</div>
+    </div>
+  </section>
+
+  <!-- ================= DATE RANGE REPORT ================= -->
+  <section class="report-section">
+    <div class="panel-header">
+      Date Range Report
+      <span class="count" id="reportRangeLabel"></span>
+    </div>
+    <div class="report-controls">
+      <div class="field">
+        <label for="reportFrom">From</label>
+        <input type="date" id="reportFrom">
+      </div>
+      <div class="field">
+        <label for="reportTo">To</label>
+        <input type="date" id="reportTo">
+      </div>
+      <div class="preset-buttons">
+        <button type="button" data-preset="today">Today</button>
+        <button type="button" data-preset="7">Last 7 Days</button>
+        <button type="button" data-preset="30">Last 30 Days</button>
+        <button type="button" data-preset="month">This Month</button>
+      </div>
+      <button type="button" id="generateReportBtn">Generate Report</button>
+    </div>
+    <div class="report-body">
+      <div class="report-summary-grid">
+        <div class="summary-card">
+          <div class="label">Total Bills</div>
+          <div class="value" id="repBillCount">0</div>
+        </div>
+        <div class="summary-card">
+          <div class="label">Gross Collection</div>
+          <div class="value" id="repGross">₹0</div>
+        </div>
+        <div class="summary-card">
+          <div class="label">Total Expense</div>
+          <div class="value" id="repExpense">₹0</div>
+        </div>
+        <div class="summary-card net">
+          <div class="label">Net Collection</div>
+          <div class="value positive" id="repNet">₹0</div>
+        </div>
+      </div>
+
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th>Date</th><th>Bills</th><th class="amount">Gross</th><th class="amount">Expense</th><th class="amount">Net</th></tr>
+          </thead>
+          <tbody id="dayWiseTableBody">
+            <tr class="empty-row"><td colspan="5">Select a date range and click Generate Report</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <details class="report-detail">
+        <summary>View full bill-wise detail for this range</summary>
+        <div class="table-wrap" style="margin-top:10px;">
+          <table>
+            <thead>
+              <tr><th>Bill No</th><th>Date</th><th>Student</th><th>Course</th><th>Mode</th><th class="amount">Amount</th></tr>
+            </thead>
+            <tbody id="reportBillDetailBody">
+              <tr class="empty-row"><td colspan="6">No data yet</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </details>
+    </div>
+  </section>
+
+  <h2 class="section-title">Today's Entries</h2>
+  <section class="panels">
+
+    <!-- BILLS PANEL -->
+    <div class="panel">
+      <div class="panel-header">
+        Bill-wise Collection
+        <span class="count" id="billHeaderCount">0 entries</span>
+      </div>
+      <form id="billForm">
+        <div class="field-row">
+          <div>
+            <label for="billNo">Bill No.</label>
+            <input type="number" id="billNo" required min="1">
+          </div>
+          <div>
+            <label for="billAmount">Amount (₹)</label>
+            <input type="number" id="billAmount" required min="0" step="0.01">
+          </div>
+        </div>
+        <div>
+          <label for="studentName">Student Name</label>
+          <input type="text" id="studentName" required>
+        </div>
+        <div class="field-row">
+          <div>
+            <label for="course">Course</label>
+            <select id="course"></select>
+          </div>
+          <div>
+            <label for="paymentMode">Payment Mode</label>
+            <select id="paymentMode"></select>
+          </div>
+        </div>
+        <button type="submit" id="billSubmitBtn">Add Bill</button>
+        <div class="status-msg" id="billStatus"></div>
+      </form>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Bill No.</th><th>Name</th><th>Course</th><th>Mode</th><th class="amount">Amount</th>
+            </tr>
+          </thead>
+          <tbody id="billTableBody">
+            <tr class="empty-row"><td colspan="5">No bills for this date</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- EXPENSES PANEL -->
+    <div class="panel">
+      <div class="panel-header">
+        Daily Expenses
+        <span class="count" id="expHeaderCount">0 entries</span>
+      </div>
+      <form id="expenseForm">
+        <div>
+          <label for="expCategory">Category</label>
+          <select id="expCategory"></select>
+        </div>
+        <div class="field-row">
+          <div>
+            <label for="expAmount">Amount (₹)</label>
+            <input type="number" id="expAmount" required min="0" step="0.01">
+          </div>
+          <div>
+            <label for="expNote">Note</label>
+            <input type="text" id="expNote" placeholder="Optional">
+          </div>
+        </div>
+        <button type="submit" id="expSubmitBtn">Add Expense</button>
+        <div class="status-msg" id="expStatus"></div>
+      </form>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th>Category</th><th>Note</th><th class="amount">Amount</th></tr>
+          </thead>
+          <tbody id="expTableBody">
+            <tr class="empty-row"><td colspan="3">No expenses for this date</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </section>
+</main>
+
+<footer>
+  Powered by CONFIG.CENTER_NAME_SHORT — Daily Bill-wise Accounting System
+</footer>
+
+<script src="config.js"></script>
+<script>
+  const $ = (id) => document.getElementById(id);
+  const todayStr = () => new Date().toISOString().slice(0, 10);
+  const inr = (n) => "₹" + Number(n || 0).toLocaleString("en-IN", { maximumFractionDigits: 2 });
+
+  // In-memory cache of all bills/expenses, refreshed after each fetch/submit
+  let ALL_BILLS = [];
+  let ALL_EXPENSES = [];
+
+  function populateDropdowns() {
+    $("course").innerHTML = CONFIG.COURSES.map(c => `<option value="${c}">${c}</option>`).join("");
+    $("paymentMode").innerHTML = CONFIG.PAYMENT_MODES.map(m => `<option value="${m}">${m}</option>`).join("");
+    $("expCategory").innerHTML = CONFIG.EXPENSE_CATEGORIES.map(c => `<option value="${c}">${c}</option>`).join("");
+    $("centerName").textContent = CONFIG.CENTER_NAME;
+    $("centerNameShort").textContent = CONFIG.CENTER_NAME_SHORT;
+  }
+
+  function apiUrl(params) {
+    const url = new URL(CONFIG.WEB_APP_URL);
+    Object.entries(params).forEach(([k, v]) => url.searchParams.set(k, v));
+    return url.toString();
+  }
+
+  async function fetchAllData() {
+    try {
+      const [bills, expenses] = await Promise.all([
+        fetch(apiUrl({ action: "getBills" })).then(r => r.json()),
+        fetch(apiUrl({ action: "getExpenses" })).then(r => r.json())
+      ]);
+      ALL_BILLS = bills.map(b => ({ ...b, Date: String(b.Date).slice(0, 10) }));
+      ALL_EXPENSES = expenses.map(x => ({ ...x, Date: String(x.Date).slice(0, 10) }));
+      return true;
+    } catch (err) {
+      console.error(err);
+      $("billStatus").textContent = "Could not load data — check your Web App URL in config.js";
+      $("billStatus").className = "status-msg err";
+      return false;
+    }
+  }
+
+  function computeSummary(bills, expenses) {
+    const grossCollection = bills.reduce((sum, b) => sum + Number(b.Amount || 0), 0);
+    const totalExpense = expenses.reduce((sum, x) => sum + Number(x.Amount || 0), 0);
+    return {
+      totalBills: bills.length,
+      grossCollection,
+      totalExpense,
+      netCollection: grossCollection - totalExpense
+    };
+  }
+
+  // ---------- TODAY'S DASHBOARD ----------
+  function loadDay(dateStr) {
+    const bills = ALL_BILLS.filter(b => b.Date === dateStr)
+                            .sort((a, b) => Number(a.BillNo) - Number(b.BillNo));
+    const expenses = ALL_EXPENSES.filter(x => x.Date === dateStr);
+
+    renderBills(bills);
+    renderExpenses(expenses);
+    renderTodaySummary(computeSummary(bills, expenses));
+  }
+
+  function renderTodaySummary(s) {
+    $("sumBillCount").textContent = s.totalBills;
+    $("sumGross").textContent = inr(s.grossCollection);
+    $("sumExpense").textContent = inr(s.totalExpense);
+    const netEl = $("sumNet");
+    netEl.textContent = inr(s.netCollection);
+    netEl.className = "value " + (s.netCollection >= 0 ? "positive" : "negative");
+  }
+
+  function renderBills(bills) {
+    $("billHeaderCount").textContent = bills.length + " entries";
+    if (!bills.length) {
+      $("billTableBody").innerHTML = `<tr class="empty-row"><td colspan="5">No bills for this date</td></tr>`;
+      return;
+    }
+    const nums = bills.map(b => Number(b.BillNo));
+    const min = Math.min(...nums), max = Math.max(...nums);
+    const present = new Set(nums);
+    const missing = [];
+    for (let n = min; n <= max; n++) if (!present.has(n)) missing.push(n);
+
+    $("billTableBody").innerHTML = bills.map(b => `
+      <tr>
+        <td>${b.BillNo}${missing.length && Number(b.BillNo) === max ? `<span class="missing-flag">gap: ${missing.join(", ")}</span>` : ""}</td>
+        <td>${b.StudentName}</td>
+        <td>${b.Course}</td>
+        <td>${b.PaymentMode}</td>
+        <td class="amount">${inr(b.Amount)}</td>
+      </tr>
+    `).join("");
+  }
+
+  function renderExpenses(expenses) {
+    $("expHeaderCount").textContent = expenses.length + " entries";
+    if (!expenses.length) {
+      $("expTableBody").innerHTML = `<tr class="empty-row"><td colspan="3">No expenses for this date</td></tr>`;
+      return;
+    }
+    $("expTableBody").innerHTML = expenses.map(x => `
+      <tr>
+        <td>${x.Category}</td>
+        <td>${x.Note || "—"}</td>
+        <td class="amount">${inr(x.Amount)}</td>
+      </tr>
+    `).join("");
+  }
+
+  // ---------- DATE RANGE REPORT ----------
+  function generateReport() {
+    const from = $("reportFrom").value;
+    const to = $("reportTo").value;
+    if (!from || !to) return;
+
+    const bills = ALL_BILLS.filter(b => b.Date >= from && b.Date <= to)
+                            .sort((a, b) => a.Date.localeCompare(b.Date) || Number(a.BillNo) - Number(b.BillNo));
+    const expenses = ALL_EXPENSES.filter(x => x.Date >= from && x.Date <= to);
+
+    $("reportRangeLabel").textContent = `${from} to ${to}`;
+
+    const overall = computeSummary(bills, expenses);
+    $("repBillCount").textContent = overall.totalBills;
+    $("repGross").textContent = inr(overall.grossCollection);
+    $("repExpense").textContent = inr(overall.totalExpense);
+    const repNetEl = $("repNet");
+    repNetEl.textContent = inr(overall.netCollection);
+    repNetEl.className = "value " + (overall.netCollection >= 0 ? "positive" : "negative");
+
+    // day-wise breakdown
+    const dates = [...new Set([...bills.map(b => b.Date), ...expenses.map(x => x.Date)])].sort();
+    if (!dates.length) {
+      $("dayWiseTableBody").innerHTML = `<tr class="empty-row"><td colspan="5">No entries in this date range</td></tr>`;
+    } else {
+      $("dayWiseTableBody").innerHTML = dates.map(d => {
+        const dayBills = bills.filter(b => b.Date === d);
+        const dayExpenses = expenses.filter(x => x.Date === d);
+        const s = computeSummary(dayBills, dayExpenses);
+        return `
+          <tr>
+            <td>${d}</td>
+            <td>${s.totalBills}</td>
+            <td class="amount">${inr(s.grossCollection)}</td>
+            <td class="amount">${inr(s.totalExpense)}</td>
+            <td class="amount">${inr(s.netCollection)}</td>
+          </tr>
+        `;
+      }).join("");
+    }
+
+    // full bill-wise detail
+    if (!bills.length) {
+      $("reportBillDetailBody").innerHTML = `<tr class="empty-row"><td colspan="6">No bills in this date range</td></tr>`;
+    } else {
+      $("reportBillDetailBody").innerHTML = bills.map(b => `
+        <tr>
+          <td>${b.BillNo}</td>
+          <td>${b.Date}</td>
+          <td>${b.StudentName}</td>
+          <td>${b.Course}</td>
+          <td>${b.PaymentMode}</td>
+          <td class="amount">${inr(b.Amount)}</td>
+        </tr>
+      `).join("");
+    }
+  }
+
+  function applyPreset(preset) {
+    const today = new Date();
+    let from = new Date(today);
+    let to = new Date(today);
+
+    if (preset === "today") {
+      // from = to = today
+    } else if (preset === "7") {
+      from.setDate(today.getDate() - 6);
+    } else if (preset === "30") {
+      from.setDate(today.getDate() - 29);
+    } else if (preset === "month") {
+      from = new Date(today.getFullYear(), today.getMonth(), 1);
+    }
+    $("reportFrom").value = from.toISOString().slice(0, 10);
+    $("reportTo").value = to.toISOString().slice(0, 10);
+    generateReport();
+  }
+
+  document.querySelectorAll(".preset-buttons button").forEach(btn => {
+    btn.addEventListener("click", () => applyPreset(btn.dataset.preset));
+  });
+  $("generateReportBtn").addEventListener("click", generateReport);
+
+  // ---------- FORM SUBMISSIONS ----------
+  $("billForm").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const btn = $("billSubmitBtn"); btn.disabled = true;
+    const statusEl = $("billStatus");
+    try {
+      await fetch(CONFIG.WEB_APP_URL, {
+        method: "POST",
+        body: JSON.stringify({
+          type: "bill",
+          billNo: $("billNo").value,
+          date: $("ledgerDate").value,
+          studentName: $("studentName").value,
+          course: $("course").value,
+          amount: $("billAmount").value,
+          paymentMode: $("paymentMode").value
+        })
+      });
+      statusEl.textContent = "Bill saved ✓";
+      statusEl.className = "status-msg ok";
+      e.target.reset();
+      populateDropdowns();
+      await fetchAllData();
+      loadDay($("ledgerDate").value);
+    } catch (err) {
+      statusEl.textContent = "Could not save, please try again";
+      statusEl.className = "status-msg err";
+    } finally {
+      btn.disabled = false;
+    }
+  });
+
+  $("expenseForm").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const btn = $("expSubmitBtn"); btn.disabled = true;
+    const statusEl = $("expStatus");
+    try {
+      await fetch(CONFIG.WEB_APP_URL, {
+        method: "POST",
+        body: JSON.stringify({
+          type: "expense",
+          date: $("ledgerDate").value,
+          category: $("expCategory").value,
+          amount: $("expAmount").value,
+          note: $("expNote").value
+        })
+      });
+      statusEl.textContent = "Expense saved ✓";
+      statusEl.className = "status-msg ok";
+      e.target.reset();
+      populateDropdowns();
+      await fetchAllData();
+      loadDay($("ledgerDate").value);
+    } catch (err) {
+      statusEl.textContent = "Could not save, please try again";
+      statusEl.className = "status-msg err";
+    } finally {
+      btn.disabled = false;
+    }
+  });
+
+  $("ledgerDate").addEventListener("change", (e) => loadDay(e.target.value));
+
+  // ---------- INIT ----------
+  async function init() {
+    populateDropdowns();
+    $("ledgerDate").value = todayStr();
+    $("reportFrom").value = todayStr();
+    $("reportTo").value = todayStr();
+    await fetchAllData();
+    loadDay(todayStr());
+    generateReport();
+  }
+  init();
+</script>
+</body>
+</html>
