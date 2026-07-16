@@ -6,19 +6,19 @@
  * only this file needs to change. Nothing else.
  */
 const CONFIG = {
-  CENTER_NAME: "Paruliya Yuva Computer Training Center",
+  CENTER_NAME: "Paruliya Youth Computer Training Center",
   CENTER_NAME_SHORT: "Paruliya YCTC",
 
   // Paste your Google Apps Script Web App URL here after deployment (Step 2)
-  WEB_APP_URL: "PASTE_YOUR_GOOGLE_APPS_SCRIPT_WEB_APP_URL_HERE",
+  WEB_APP_URL: https://script.google.com/macros/s/AKfycbzTxTf4ycqkKq-RPDaR3ebU1q_ju6UlqvKTH5-oE73FKXcVY8HfEOkeeq7KFt9RyJoWnw/exec,
 
   COURSES: [
-    "Tally Prime",
-    "MS Office",
-    "Manual Accountancy",
-    "AI / Prompt Engineering",
-    "Basic Computer",
-    "Other"
+    "CITA",
+    "DITA",
+    "CFAS",
+    "DFAS",
+    "LEARN & EARN",
+    "COMPUTER TEACHER'S TRAINING"
   ],
 
   EXPENSE_CATEGORIES: [
@@ -28,7 +28,7 @@ const CONFIG = {
     "Staff Salary",
     "Marketing / Advertisement",
     "Stationery",
-    "Travel",
+    "Travel / Fuel",
     "Other"
   ],
 
