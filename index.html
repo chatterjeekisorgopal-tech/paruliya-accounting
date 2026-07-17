@@ -280,6 +280,20 @@
     margin-left: 6px;
   }
 
+  .row-actions { display: flex; gap: 6px; white-space: nowrap; }
+  .row-actions button {
+    padding: 4px 8px;
+    font-size: 11.5px;
+    border-radius: 3px;
+    border: 1px solid #C9C0A8;
+    background: #EFE9D8;
+    color: var(--ink);
+    cursor: pointer;
+    font-weight: 600;
+  }
+  .row-actions button.delete-btn { background: #FBEAEA; border-color: #E0BFBF; color: var(--negative); }
+  .row-actions button:hover { filter: brightness(0.96); }
+
   .status-msg { font-size: 12.5px; margin-top: 2px; min-height: 16px; }
   .status-msg.ok { color: var(--positive); }
   .status-msg.err { color: var(--negative); }
@@ -446,18 +460,21 @@
             <select id="paymentMode"></select>
           </div>
         </div>
-        <button type="submit" id="billSubmitBtn">Add Bill</button>
+        <div style="display:flex; gap:8px;">
+          <button type="submit" id="billSubmitBtn" style="flex:1;">Add Bill</button>
+          <button type="button" id="billCancelBtn" style="display:none; background:#8a8a8a;">Cancel</button>
+        </div>
         <div class="status-msg" id="billStatus"></div>
       </form>
       <div class="table-wrap">
         <table>
           <thead>
             <tr>
-              <th>Bill No.</th><th>Name</th><th>Course</th><th>Mode</th><th class="amount">Amount</th>
+              <th>Bill No.</th><th>Name</th><th>Course</th><th>Mode</th><th class="amount">Amount</th><th>Actions</th>
             </tr>
           </thead>
           <tbody id="billTableBody">
-            <tr class="empty-row"><td colspan="5">No bills for this date</td></tr>
+            <tr class="empty-row"><td colspan="6">No bills for this date</td></tr>
           </tbody>
         </table>
       </div>
@@ -484,16 +501,19 @@
             <input type="text" id="expNote" placeholder="Optional">
           </div>
         </div>
-        <button type="submit" id="expSubmitBtn">Add Expense</button>
+        <div style="display:flex; gap:8px;">
+          <button type="submit" id="expSubmitBtn" style="flex:1;">Add Expense</button>
+          <button type="button" id="expCancelBtn" style="display:none; background:#8a8a8a;">Cancel</button>
+        </div>
         <div class="status-msg" id="expStatus"></div>
       </form>
       <div class="table-wrap">
         <table>
           <thead>
-            <tr><th>Category</th><th>Note</th><th class="amount">Amount</th></tr>
+            <tr><th>Category</th><th>Note</th><th class="amount">Amount</th><th>Actions</th></tr>
           </thead>
           <tbody id="expTableBody">
-            <tr class="empty-row"><td colspan="3">No expenses for this date</td></tr>
+            <tr class="empty-row"><td colspan="4">No expenses for this date</td></tr>
           </tbody>
         </table>
       </div>
@@ -582,7 +602,7 @@
   function renderBills(bills) {
     $("billHeaderCount").textContent = bills.length + " entries";
     if (!bills.length) {
-      $("billTableBody").innerHTML = `<tr class="empty-row"><td colspan="5">No bills for this date</td></tr>`;
+      $("billTableBody").innerHTML = `<tr class="empty-row"><td colspan="6">No bills for this date</td></tr>`;
       return;
     }
     const nums = bills.map(b => Number(b.BillNo));
@@ -598,6 +618,10 @@
         <td>${b.Course}</td>
         <td>${b.PaymentMode}</td>
         <td class="amount">${inr(b.Amount)}</td>
+        <td class="row-actions">
+          <button type="button" class="edit-bill-btn" data-row="${b._row}">Edit</button>
+          <button type="button" class="delete-btn delete-bill-btn" data-row="${b._row}">Delete</button>
+        </td>
       </tr>
     `).join("");
   }
@@ -605,7 +629,7 @@
   function renderExpenses(expenses) {
     $("expHeaderCount").textContent = expenses.length + " entries";
     if (!expenses.length) {
-      $("expTableBody").innerHTML = `<tr class="empty-row"><td colspan="3">No expenses for this date</td></tr>`;
+      $("expTableBody").innerHTML = `<tr class="empty-row"><td colspan="4">No expenses for this date</td></tr>`;
       return;
     }
     $("expTableBody").innerHTML = expenses.map(x => `
@@ -613,6 +637,10 @@
         <td>${x.Category}</td>
         <td>${x.Note || "—"}</td>
         <td class="amount">${inr(x.Amount)}</td>
+        <td class="row-actions">
+          <button type="button" class="edit-exp-btn" data-row="${x._row}">Edit</button>
+          <button type="button" class="delete-btn delete-exp-btn" data-row="${x._row}">Delete</button>
+        </td>
       </tr>
     `).join("");
   }
@@ -699,16 +727,113 @@
   });
   $("generateReportBtn").addEventListener("click", generateReport);
 
+  // ---------- EDIT / DELETE ----------
+  let editingBillRow = null;
+  let editingExpenseRow = null;
+
+  function startEditBill(rowIndex) {
+    const b = ALL_BILLS.find(x => String(x._row) === String(rowIndex));
+    if (!b) return;
+    editingBillRow = rowIndex;
+    $("billNo").value = b.BillNo;
+    $("ledgerDate").value = b.Date;
+    $("studentName").value = b.StudentName;
+    $("course").value = b.Course;
+    $("paymentMode").value = b.PaymentMode;
+    $("billAmount").value = b.Amount;
+    $("billSubmitBtn").textContent = "Update Bill";
+    $("billCancelBtn").style.display = "block";
+    loadDay(b.Date);
+    window.scrollTo({ top: $("billForm").getBoundingClientRect().top + window.scrollY - 20, behavior: "smooth" });
+  }
+
+  function cancelBillEdit() {
+    editingBillRow = null;
+    $("billForm").reset();
+    populateDropdowns();
+    $("billSubmitBtn").textContent = "Add Bill";
+    $("billCancelBtn").style.display = "none";
+  }
+
+  async function deleteBill(rowIndex) {
+    if (!confirm("Delete this bill? This cannot be undone.")) return;
+    try {
+      await fetch(CONFIG.WEB_APP_URL, {
+        method: "POST",
+        body: JSON.stringify({ type: "deleteBill", rowIndex: Number(rowIndex) })
+      });
+      await fetchAllData();
+      loadDay($("ledgerDate").value);
+      generateReport();
+    } catch (err) {
+      alert("Could not delete, please try again");
+    }
+  }
+
+  function startEditExpense(rowIndex) {
+    const x = ALL_EXPENSES.find(e => String(e._row) === String(rowIndex));
+    if (!x) return;
+    editingExpenseRow = rowIndex;
+    $("ledgerDate").value = x.Date;
+    $("expCategory").value = x.Category;
+    $("expAmount").value = x.Amount;
+    $("expNote").value = x.Note || "";
+    $("expSubmitBtn").textContent = "Update Expense";
+    $("expCancelBtn").style.display = "block";
+    loadDay(x.Date);
+    window.scrollTo({ top: $("expenseForm").getBoundingClientRect().top + window.scrollY - 20, behavior: "smooth" });
+  }
+
+  function cancelExpenseEdit() {
+    editingExpenseRow = null;
+    $("expenseForm").reset();
+    populateDropdowns();
+    $("expSubmitBtn").textContent = "Add Expense";
+    $("expCancelBtn").style.display = "none";
+  }
+
+  async function deleteExpense(rowIndex) {
+    if (!confirm("Delete this expense? This cannot be undone.")) return;
+    try {
+      await fetch(CONFIG.WEB_APP_URL, {
+        method: "POST",
+        body: JSON.stringify({ type: "deleteExpense", rowIndex: Number(rowIndex) })
+      });
+      await fetchAllData();
+      loadDay($("ledgerDate").value);
+      generateReport();
+    } catch (err) {
+      alert("Could not delete, please try again");
+    }
+  }
+
+  $("billTableBody").addEventListener("click", (e) => {
+    const editBtn = e.target.closest(".edit-bill-btn");
+    const delBtn = e.target.closest(".delete-bill-btn");
+    if (editBtn) startEditBill(editBtn.dataset.row);
+    if (delBtn) deleteBill(delBtn.dataset.row);
+  });
+  $("expTableBody").addEventListener("click", (e) => {
+    const editBtn = e.target.closest(".edit-exp-btn");
+    const delBtn = e.target.closest(".delete-exp-btn");
+    if (editBtn) startEditExpense(editBtn.dataset.row);
+    if (delBtn) deleteExpense(delBtn.dataset.row);
+  });
+  $("billCancelBtn").addEventListener("click", cancelBillEdit);
+  $("expCancelBtn").addEventListener("click", cancelExpenseEdit);
+
   // ---------- FORM SUBMISSIONS ----------
   $("billForm").addEventListener("submit", async (e) => {
     e.preventDefault();
     const btn = $("billSubmitBtn"); btn.disabled = true;
     const statusEl = $("billStatus");
+    const isEdit = editingBillRow !== null;
     try {
       await fetch(CONFIG.WEB_APP_URL, {
         method: "POST",
         body: JSON.stringify({
-          type: "bill",
+          type: isEdit ? "updateBill" : "bill",
+          rowIndex: isEdit ? Number(editingBillRow) : undefined,
           billNo: $("billNo").value,
           date: $("ledgerDate").value,
           studentName: $("studentName").value,
@@ -717,12 +842,12 @@
           paymentMode: $("paymentMode").value
         })
       });
-      statusEl.textContent = "Bill saved ✓";
+      statusEl.textContent = isEdit ? "Bill updated ✓" : "Bill saved ✓";
       statusEl.className = "status-msg ok";
-      e.target.reset();
-      populateDropdowns();
+      cancelBillEdit();
       await fetchAllData();
       loadDay($("ledgerDate").value);
+      generateReport();
     } catch (err) {
       statusEl.textContent = "Could not save, please try again";
       statusEl.className = "status-msg err";
@@ -735,23 +860,25 @@
     e.preventDefault();
     const btn = $("expSubmitBtn"); btn.disabled = true;
     const statusEl = $("expStatus");
+    const isEdit = editingExpenseRow !== null;
     try {
       await fetch(CONFIG.WEB_APP_URL, {
         method: "POST",
         body: JSON.stringify({
-          type: "expense",
+          type: isEdit ? "updateExpense" : "expense",
+          rowIndex: isEdit ? Number(editingExpenseRow) : undefined,
           date: $("ledgerDate").value,
           category: $("expCategory").value,
           amount: $("expAmount").value,
           note: $("expNote").value
         })
       });
-      statusEl.textContent = "Expense saved ✓";
+      statusEl.textContent = isEdit ? "Expense updated ✓" : "Expense saved ✓";
       statusEl.className = "status-msg ok";
-      e.target.reset();
-      populateDropdowns();
+      cancelExpenseEdit();
       await fetchAllData();
       loadDay($("ledgerDate").value);
+      generateReport();
     } catch (err) {
       statusEl.textContent = "Could not save, please try again";
       statusEl.className = "status-msg err";
