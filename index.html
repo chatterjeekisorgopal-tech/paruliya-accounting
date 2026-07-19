@@ -331,6 +331,8 @@
     <div class="center-sub" id="centerNameShort">Center</div>
   </div>
   <div class="date-row">
+    <label for="centerSwitcher">Center</label>
+    <select id="centerSwitcher" style="font-family:'IBM Plex Mono', monospace; padding:8px 12px; border:1.5px solid var(--ink); border-radius:3px; background:var(--card-bg); font-size:14px; color:var(--ink);"></select>
     <label for="ledgerDate">Date</label>
     <input type="date" id="ledgerDate">
   </div>
@@ -429,10 +431,10 @@
         <div class="table-wrap" style="margin-top:10px;">
           <table>
             <thead>
-              <tr><th>Bill No</th><th>Date</th><th>Student</th><th>Course</th><th>Mode</th><th class="amount">Amount</th></tr>
+              <tr><th>Bill No</th><th>Roll No</th><th>Date</th><th>Student</th><th>Course</th><th>Mode</th><th class="amount">Amount</th></tr>
             </thead>
             <tbody id="reportBillDetailBody">
-              <tr class="empty-row"><td colspan="6">No data yet</td></tr>
+              <tr class="empty-row"><td colspan="7">No data yet</td></tr>
             </tbody>
           </table>
         </div>
@@ -459,8 +461,8 @@
     <div class="panel-header">Find a Student's Bills</div>
     <div class="report-controls" style="border-bottom:1px dashed var(--paper-line);">
       <div class="field" style="flex:1; min-width:200px;">
-        <label for="studentSearchInput">Student Name</label>
-        <input type="text" id="studentSearchInput" placeholder="Type a name, e.g. Rishi">
+        <label for="studentSearchInput">Name or Roll No.</label>
+        <input type="text" id="studentSearchInput" placeholder="Type a name or roll no, e.g. Rishi or 101">
       </div>
       <button type="button" id="studentSearchBtn">Search</button>
     </div>
@@ -469,10 +471,10 @@
       <div class="table-wrap">
         <table>
           <thead>
-            <tr><th>Bill No</th><th>Date</th><th>Course</th><th>Mode</th><th class="amount">Amount</th></tr>
+            <tr><th>Bill No</th><th>Roll No</th><th>Name</th><th>Date</th><th>Course</th><th>Mode</th><th class="amount">Amount</th></tr>
           </thead>
           <tbody id="studentSearchBody">
-            <tr class="empty-row"><td colspan="5">Type a name and click Search</td></tr>
+            <tr class="empty-row"><td colspan="7">Type a name or roll no and click Search</td></tr>
           </tbody>
         </table>
       </div>
@@ -500,9 +502,15 @@
             <input type="number" id="billAmount" required min="0" step="0.01">
           </div>
         </div>
-        <div>
-          <label for="studentName">Student Name</label>
-          <input type="text" id="studentName" required>
+        <div class="field-row">
+          <div>
+            <label for="rollNo">Roll No.</label>
+            <input type="text" id="rollNo" required>
+          </div>
+          <div>
+            <label for="studentName">Student Name</label>
+            <input type="text" id="studentName" required>
+          </div>
         </div>
         <div class="field-row">
           <div>
@@ -524,11 +532,11 @@
         <table>
           <thead>
             <tr>
-              <th>Bill No.</th><th>Name</th><th>Course</th><th>Mode</th><th class="amount">Amount</th><th>Actions</th>
+              <th>Bill No.</th><th>Roll No.</th><th>Name</th><th>Course</th><th>Mode</th><th class="amount">Amount</th><th>Actions</th>
             </tr>
           </thead>
           <tbody id="billTableBody">
-            <tr class="empty-row"><td colspan="6">No bills for this date</td></tr>
+            <tr class="empty-row"><td colspan="7">No bills for this date</td></tr>
           </tbody>
         </table>
       </div>
@@ -590,17 +598,44 @@
   let ALL_BILLS = [];
   let ALL_EXPENSES = [];
 
+  // ---------- MULTI-CENTER ----------
+  let currentCenterIndex = 0;
+
+  function getCurrentCenter() {
+    return CONFIG.CENTERS[currentCenterIndex];
+  }
+
+  function populateCenterSwitcher() {
+    $("centerSwitcher").innerHTML = CONFIG.CENTERS.map((c, i) => `<option value="${i}">${c.CENTER_NAME_SHORT}</option>`).join("");
+    const savedIndex = localStorage.getItem("paruliya_selected_center");
+    if (savedIndex !== null && CONFIG.CENTERS[savedIndex]) currentCenterIndex = Number(savedIndex);
+    $("centerSwitcher").value = currentCenterIndex;
+  }
+
+  async function switchCenter(index) {
+    currentCenterIndex = Number(index);
+    localStorage.setItem("paruliya_selected_center", currentCenterIndex);
+    populateDropdowns();
+    $("studentSearchInput").value = "";
+    searchByStudent();
+    await fetchAllData();
+    loadDay($("ledgerDate").value);
+    generateReport();
+    renderTrendChart(trendMode);
+  }
+
   function populateDropdowns() {
     $("course").innerHTML = CONFIG.COURSES.map(c => `<option value="${c}">${c}</option>`).join("");
     $("paymentMode").innerHTML = CONFIG.PAYMENT_MODES.map(m => `<option value="${m}">${m}</option>`).join("");
     $("expCategory").innerHTML = CONFIG.EXPENSE_CATEGORIES.map(c => `<option value="${c}">${c}</option>`).join("");
-    $("centerName").textContent = CONFIG.CENTER_NAME;
-    $("centerNameShort").textContent = CONFIG.CENTER_NAME_SHORT;
-    $("footerCenterName").textContent = CONFIG.CENTER_NAME_SHORT;
+    const center = getCurrentCenter();
+    $("centerName").textContent = center.CENTER_NAME;
+    $("centerNameShort").textContent = center.CENTER_NAME_SHORT;
+    $("footerCenterName").textContent = center.CENTER_NAME_SHORT;
   }
 
   function apiUrl(params) {
-    const url = new URL(CONFIG.WEB_APP_URL);
+    const url = new URL(getCurrentCenter().WEB_APP_URL);
     Object.entries(params).forEach(([k, v]) => url.searchParams.set(k, v));
     return url.toString();
   }
@@ -671,7 +706,7 @@
   function renderBills(bills) {
     $("billHeaderCount").textContent = bills.length + " entries";
     if (!bills.length) {
-      $("billTableBody").innerHTML = `<tr class="empty-row"><td colspan="6">No bills for this date</td></tr>`;
+      $("billTableBody").innerHTML = `<tr class="empty-row"><td colspan="7">No bills for this date</td></tr>`;
       return;
     }
     const nums = bills.map(b => Number(b.BillNo));
@@ -683,6 +718,7 @@
     $("billTableBody").innerHTML = bills.map(b => `
       <tr>
         <td>${b.BillNo}${missing.length && Number(b.BillNo) === max ? `<span class="missing-flag">gap: ${missing.join(", ")}</span>` : ""}</td>
+        <td>${b.RollNo ?? ""}</td>
         <td>${b.StudentName}</td>
         <td>${b.Course}</td>
         <td>${b.PaymentMode}</td>
@@ -762,11 +798,12 @@
 
     // full bill-wise detail
     if (!bills.length) {
-      $("reportBillDetailBody").innerHTML = `<tr class="empty-row"><td colspan="6">No bills in this date range</td></tr>`;
+      $("reportBillDetailBody").innerHTML = `<tr class="empty-row"><td colspan="7">No bills in this date range</td></tr>`;
     } else {
       $("reportBillDetailBody").innerHTML = bills.map(b => `
         <tr>
           <td>${b.BillNo}</td>
+          <td>${b.RollNo ?? ""}</td>
           <td>${b.Date}</td>
           <td>${b.StudentName}</td>
           <td>${b.Course}</td>
@@ -822,9 +859,9 @@
     });
     lines.push("");
     lines.push("Bill-wise Detail");
-    lines.push(["Bill No", "Date", "Student", "Course", "Payment Mode", "Amount"].join(","));
+    lines.push(["Bill No", "Roll No", "Date", "Student", "Course", "Payment Mode", "Amount"].join(","));
     LAST_REPORT.bills.forEach(b => {
-      lines.push([b.BillNo, b.Date, b.StudentName, b.Course, b.PaymentMode, b.Amount].map(csvEscape).join(","));
+      lines.push([b.BillNo, b.RollNo, b.Date, b.StudentName, b.Course, b.PaymentMode, b.Amount].map(csvEscape).join(","));
     });
 
     const blob = new Blob([lines.join("\n")], { type: "text/csv;charset=utf-8;" });
@@ -916,16 +953,18 @@
 
     if (!query) {
       summaryEl.textContent = "";
-      bodyEl.innerHTML = `<tr class="empty-row"><td colspan="5">Type a name and click Search</td></tr>`;
+      bodyEl.innerHTML = `<tr class="empty-row"><td colspan="7">Type a name or roll no and click Search</td></tr>`;
       return;
     }
 
-    const matches = ALL_BILLS.filter(b => String(b.StudentName || "").toLowerCase().includes(query))
-                              .sort((a, b) => a.Date.localeCompare(b.Date));
+    const matches = ALL_BILLS.filter(b =>
+        String(b.StudentName || "").toLowerCase().includes(query) ||
+        String(b.RollNo || "").toLowerCase().includes(query)
+      ).sort((a, b) => a.Date.localeCompare(b.Date));
 
     if (!matches.length) {
       summaryEl.textContent = `No bills found for "${$("studentSearchInput").value}"`;
-      bodyEl.innerHTML = `<tr class="empty-row"><td colspan="5">No matching bills</td></tr>`;
+      bodyEl.innerHTML = `<tr class="empty-row"><td colspan="7">No matching bills</td></tr>`;
       return;
     }
 
@@ -936,6 +975,8 @@
     bodyEl.innerHTML = matches.map(b => `
       <tr>
         <td>${b.BillNo}</td>
+        <td>${b.RollNo ?? ""}</td>
+        <td>${b.StudentName}</td>
         <td>${b.Date}</td>
         <td>${b.Course}</td>
         <td>${b.PaymentMode}</td>
@@ -980,6 +1021,7 @@
     editingBillRow = rowIndex;
     $("billNo").value = b.BillNo;
     $("ledgerDate").value = b.Date;
+    $("rollNo").value = b.RollNo ?? "";
     $("studentName").value = b.StudentName;
     $("course").value = b.Course;
     $("paymentMode").value = b.PaymentMode;
@@ -1003,7 +1045,7 @@
   async function deleteBill(rowIndex) {
     if (!confirm("Delete this bill? This cannot be undone.")) return;
     try {
-      await fetch(CONFIG.WEB_APP_URL, {
+      await fetch(getCurrentCenter().WEB_APP_URL, {
         method: "POST",
         body: JSON.stringify({ type: "deleteBill", rowIndex: Number(rowIndex) })
       });
@@ -1041,7 +1083,7 @@
   async function deleteExpense(rowIndex) {
     if (!confirm("Delete this expense? This cannot be undone.")) return;
     try {
-      await fetch(CONFIG.WEB_APP_URL, {
+      await fetch(getCurrentCenter().WEB_APP_URL, {
         method: "POST",
         body: JSON.stringify({ type: "deleteExpense", rowIndex: Number(rowIndex) })
       });
@@ -1085,13 +1127,14 @@
     const statusEl = $("billStatus");
     const isEdit = editingBillRow !== null;
     try {
-      await fetch(CONFIG.WEB_APP_URL, {
+      await fetch(getCurrentCenter().WEB_APP_URL, {
         method: "POST",
         body: JSON.stringify({
           type: isEdit ? "updateBill" : "bill",
           rowIndex: isEdit ? Number(editingBillRow) : undefined,
           billNo: $("billNo").value,
           date: $("ledgerDate").value,
+          rollNo: $("rollNo").value,
           studentName: $("studentName").value,
           course: $("course").value,
           amount: $("billAmount").value,
@@ -1119,7 +1162,7 @@
     const statusEl = $("expStatus");
     const isEdit = editingExpenseRow !== null;
     try {
-      await fetch(CONFIG.WEB_APP_URL, {
+      await fetch(getCurrentCenter().WEB_APP_URL, {
         method: "POST",
         body: JSON.stringify({
           type: isEdit ? "updateExpense" : "expense",
@@ -1176,6 +1219,7 @@
       </div>`;
       return;
     }
+    populateCenterSwitcher();
     populateDropdowns();
     $("ledgerDate").value = todayStr();
     $("reportFrom").value = todayStr();
@@ -1185,6 +1229,7 @@
     generateReport();
     renderTrendChart("weekly");
   }
+  $("centerSwitcher").addEventListener("change", (e) => switchCenter(e.target.value));
   init();
 </script>
 <script>
