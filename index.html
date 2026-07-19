@@ -182,6 +182,7 @@
     font-weight: 600;
   }
   .preset-buttons button:hover { background: #E3DCC8; }
+  .preset-buttons button.active { background: var(--rule-red); color: #fff; border-color: var(--rule-red); }
   #generateReportBtn {
     background: var(--rule-red);
     color: #fff;
@@ -309,6 +310,7 @@
     .field-row { grid-template-columns: 1fr; }
   }
 </style>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
 </head>
 <body>
 
@@ -356,6 +358,17 @@
     </div>
   </section>
 
+  <section class="summary-grid" style="grid-template-columns: repeat(2, 1fr); margin-top:-18px;">
+    <div class="summary-card">
+      <div class="label">Opening Balance (Cash in Hand)</div>
+      <div class="value" id="sumOpening">₹0</div>
+    </div>
+    <div class="summary-card net">
+      <div class="label">Closing Balance</div>
+      <div class="value positive" id="sumClosing">₹0</div>
+    </div>
+  </section>
+
   <!-- ================= DATE RANGE REPORT ================= -->
   <section class="report-section">
     <div class="panel-header">
@@ -378,6 +391,7 @@
         <button type="button" data-preset="month">This Month</button>
       </div>
       <button type="button" id="generateReportBtn">Generate Report</button>
+      <button type="button" id="exportCsvBtn" style="background:#3B4A6B; color:#fff; border:none; padding:9px 16px; border-radius:3px; font-weight:600; font-size:14px; cursor:pointer;">⬇ Export CSV</button>
     </div>
     <div class="report-body">
       <div class="report-summary-grid">
@@ -426,6 +440,45 @@
     </div>
   </section>
 
+  <h2 class="section-title">Collection Trend</h2>
+  <section class="report-section">
+    <div class="panel-header">
+      Net Collection Over Time
+      <div class="preset-buttons">
+        <button type="button" id="trendWeeklyBtn" data-mode="weekly">Weekly</button>
+        <button type="button" id="trendMonthlyBtn" data-mode="monthly">Monthly</button>
+      </div>
+    </div>
+    <div style="padding:18px;">
+      <canvas id="trendChart" height="90"></canvas>
+    </div>
+  </section>
+
+  <h2 class="section-title">Search by Student</h2>
+  <section class="report-section">
+    <div class="panel-header">Find a Student's Bills</div>
+    <div class="report-controls" style="border-bottom:1px dashed var(--paper-line);">
+      <div class="field" style="flex:1; min-width:200px;">
+        <label for="studentSearchInput">Student Name</label>
+        <input type="text" id="studentSearchInput" placeholder="Type a name, e.g. Rishi">
+      </div>
+      <button type="button" id="studentSearchBtn">Search</button>
+    </div>
+    <div class="report-body">
+      <div id="studentSearchSummary" style="font-size:13.5px; color:var(--ink-soft); margin-bottom:10px;"></div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th>Bill No</th><th>Date</th><th>Course</th><th>Mode</th><th class="amount">Amount</th></tr>
+          </thead>
+          <tbody id="studentSearchBody">
+            <tr class="empty-row"><td colspan="5">Type a name and click Search</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
   <h2 class="section-title">Today's Entries</h2>
   <section class="panels">
 
@@ -440,6 +493,7 @@
           <div>
             <label for="billNo">Bill No.</label>
             <input type="number" id="billNo" required min="1">
+            <div id="billNoWarning" style="font-size:11.5px; color:#A13D3D; margin-top:3px; min-height:14px;"></div>
           </div>
           <div>
             <label for="billAmount">Amount (₹)</label>
@@ -580,6 +634,13 @@
   }
 
   // ---------- TODAY'S DASHBOARD ----------
+  function computeOpeningBalance(dateStr) {
+    // Cumulative net collection of every entry strictly before this date
+    const priorBills = ALL_BILLS.filter(b => b.Date < dateStr);
+    const priorExpenses = ALL_EXPENSES.filter(x => x.Date < dateStr);
+    return computeSummary(priorBills, priorExpenses).netCollection;
+  }
+
   function loadDay(dateStr) {
     const bills = ALL_BILLS.filter(b => b.Date === dateStr)
                             .sort((a, b) => Number(a.BillNo) - Number(b.BillNo));
@@ -587,7 +648,15 @@
 
     renderBills(bills);
     renderExpenses(expenses);
-    renderTodaySummary(computeSummary(bills, expenses));
+    const summary = computeSummary(bills, expenses);
+    renderTodaySummary(summary);
+
+    const opening = computeOpeningBalance(dateStr);
+    const closing = opening + summary.netCollection;
+    $("sumOpening").textContent = inr(opening);
+    const closingEl = $("sumClosing");
+    closingEl.textContent = inr(closing);
+    closingEl.className = "value " + (closing >= 0 ? "positive" : "negative");
   }
 
   function renderTodaySummary(s) {
@@ -646,6 +715,8 @@
   }
 
   // ---------- DATE RANGE REPORT ----------
+  let LAST_REPORT = { from: null, to: null, dayRows: [], bills: [] };
+
   function generateReport() {
     const from = $("reportFrom").value;
     const to = $("reportTo").value;
@@ -667,23 +738,26 @@
 
     // day-wise breakdown
     const dates = [...new Set([...bills.map(b => b.Date), ...expenses.map(x => x.Date)])].sort();
+    const dayRows = dates.map(d => {
+      const dayBills = bills.filter(b => b.Date === d);
+      const dayExpenses = expenses.filter(x => x.Date === d);
+      const s = computeSummary(dayBills, dayExpenses);
+      return { date: d, ...s };
+    });
+    LAST_REPORT = { from, to, dayRows, bills };
+
     if (!dates.length) {
       $("dayWiseTableBody").innerHTML = `<tr class="empty-row"><td colspan="5">No entries in this date range</td></tr>`;
     } else {
-      $("dayWiseTableBody").innerHTML = dates.map(d => {
-        const dayBills = bills.filter(b => b.Date === d);
-        const dayExpenses = expenses.filter(x => x.Date === d);
-        const s = computeSummary(dayBills, dayExpenses);
-        return `
+      $("dayWiseTableBody").innerHTML = dayRows.map(s => `
           <tr>
-            <td>${d}</td>
+            <td>${s.date}</td>
             <td>${s.totalBills}</td>
             <td class="amount">${inr(s.grossCollection)}</td>
             <td class="amount">${inr(s.totalExpense)}</td>
             <td class="amount">${inr(s.netCollection)}</td>
           </tr>
-        `;
-      }).join("");
+        `).join("");
     }
 
     // full bill-wise detail
@@ -727,6 +801,175 @@
   });
   $("generateReportBtn").addEventListener("click", generateReport);
 
+  // ---------- CSV EXPORT ----------
+  function csvEscape(val) {
+    const s = String(val ?? "");
+    return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+  }
+
+  function exportReportCSV() {
+    if (!LAST_REPORT.dayRows.length && !LAST_REPORT.bills.length) {
+      alert("Generate a report first, then export.");
+      return;
+    }
+    const lines = [];
+    lines.push(`Paruliya Yuva Computer Training Center - Report ${LAST_REPORT.from} to ${LAST_REPORT.to}`);
+    lines.push("");
+    lines.push("Day-wise Summary");
+    lines.push(["Date", "Bills", "Gross Collection", "Total Expense", "Net Collection"].join(","));
+    LAST_REPORT.dayRows.forEach(s => {
+      lines.push([s.date, s.totalBills, s.grossCollection, s.totalExpense, s.netCollection].map(csvEscape).join(","));
+    });
+    lines.push("");
+    lines.push("Bill-wise Detail");
+    lines.push(["Bill No", "Date", "Student", "Course", "Payment Mode", "Amount"].join(","));
+    LAST_REPORT.bills.forEach(b => {
+      lines.push([b.BillNo, b.Date, b.StudentName, b.Course, b.PaymentMode, b.Amount].map(csvEscape).join(","));
+    });
+
+    const blob = new Blob([lines.join("\n")], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `Paruliya_Report_${LAST_REPORT.from}_to_${LAST_REPORT.to}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }
+
+  $("exportCsvBtn").addEventListener("click", exportReportCSV);
+
+  // ---------- COLLECTION TREND CHART ----------
+  let trendChartInstance = null;
+  let trendMode = "weekly";
+
+  function getWeekLabel(dateStr) {
+    const d = new Date(dateStr + "T00:00:00");
+    const day = d.getDay();
+    const diffToMonday = (day === 0 ? -6 : 1) - day;
+    const monday = new Date(d);
+    monday.setDate(d.getDate() + diffToMonday);
+    return monday.toISOString().slice(0, 10);
+  }
+
+  function aggregateTrend(mode) {
+    const keyFn = mode === "weekly" ? (d) => getWeekLabel(d) : (d) => d.slice(0, 7);
+    const map = {};
+    ALL_BILLS.forEach(b => {
+      const k = keyFn(b.Date);
+      if (!map[k]) map[k] = { gross: 0, expense: 0 };
+      map[k].gross += Number(b.Amount || 0);
+    });
+    ALL_EXPENSES.forEach(x => {
+      const k = keyFn(x.Date);
+      if (!map[k]) map[k] = { gross: 0, expense: 0 };
+      map[k].expense += Number(x.Amount || 0);
+    });
+    const keys = Object.keys(map).sort();
+    const limit = mode === "weekly" ? 8 : 6;
+    const recentKeys = keys.slice(-limit);
+    return recentKeys.map(k => ({
+      label: mode === "weekly" ? `Wk of ${k}` : k,
+      gross: map[k].gross,
+      expense: map[k].expense,
+      net: map[k].gross - map[k].expense
+    }));
+  }
+
+  function renderTrendChart(mode) {
+    trendMode = mode;
+    $("trendWeeklyBtn").classList.toggle("active", mode === "weekly");
+    $("trendMonthlyBtn").classList.toggle("active", mode === "monthly");
+
+    const data = aggregateTrend(mode);
+    const ctx = document.getElementById("trendChart").getContext("2d");
+    if (trendChartInstance) trendChartInstance.destroy();
+
+    if (typeof Chart === "undefined") return; // Chart.js failed to load (e.g. offline)
+
+    trendChartInstance = new Chart(ctx, {
+      data: {
+        labels: data.map(d => d.label),
+        datasets: [
+          { type: "bar", label: "Gross Collection", data: data.map(d => d.gross), backgroundColor: "#9C7A28" },
+          { type: "bar", label: "Total Expense", data: data.map(d => d.expense), backgroundColor: "#A13D3D" },
+          { type: "line", label: "Net Collection", data: data.map(d => d.net), borderColor: "#1B2A4A", backgroundColor: "#1B2A4A", tension: 0.3 }
+        ]
+      },
+      options: {
+        responsive: true,
+        plugins: { legend: { position: "bottom", labels: { font: { family: "Inter" } } } },
+        scales: { y: { beginAtZero: true } }
+      }
+    });
+  }
+
+  $("trendWeeklyBtn").addEventListener("click", () => renderTrendChart("weekly"));
+  $("trendMonthlyBtn").addEventListener("click", () => renderTrendChart("monthly"));
+
+  // ---------- STUDENT SEARCH ----------
+  function searchByStudent() {
+    const query = $("studentSearchInput").value.trim().toLowerCase();
+    const summaryEl = $("studentSearchSummary");
+    const bodyEl = $("studentSearchBody");
+
+    if (!query) {
+      summaryEl.textContent = "";
+      bodyEl.innerHTML = `<tr class="empty-row"><td colspan="5">Type a name and click Search</td></tr>`;
+      return;
+    }
+
+    const matches = ALL_BILLS.filter(b => String(b.StudentName || "").toLowerCase().includes(query))
+                              .sort((a, b) => a.Date.localeCompare(b.Date));
+
+    if (!matches.length) {
+      summaryEl.textContent = `No bills found for "${$("studentSearchInput").value}"`;
+      bodyEl.innerHTML = `<tr class="empty-row"><td colspan="5">No matching bills</td></tr>`;
+      return;
+    }
+
+    const total = matches.reduce((sum, b) => sum + Number(b.Amount || 0), 0);
+    const names = [...new Set(matches.map(b => b.StudentName))];
+    summaryEl.innerHTML = `<b>${matches.length}</b> bill(s) found across <b>${names.length}</b> matching name(s) — Total paid: <b>${inr(total)}</b>`;
+
+    bodyEl.innerHTML = matches.map(b => `
+      <tr>
+        <td>${b.BillNo}</td>
+        <td>${b.Date}</td>
+        <td>${b.Course}</td>
+        <td>${b.PaymentMode}</td>
+        <td class="amount">${inr(b.Amount)}</td>
+      </tr>
+    `).join("");
+  }
+
+  $("studentSearchBtn").addEventListener("click", searchByStudent);
+  $("studentSearchInput").addEventListener("keydown", (e) => { if (e.key === "Enter") searchByStudent(); });
+  $("studentSearchInput").addEventListener("input", () => {
+    if ($("studentSearchInput").value.trim() === "") searchByStudent();
+  });
+
+  // ---------- DUPLICATE BILL NO CHECK ----------
+  function findDuplicateBill(billNo) {
+    const num = Number(billNo);
+    return ALL_BILLS.find(b => Number(b.BillNo) === num && String(b._row) !== String(editingBillRow));
+  }
+
+  $("billNo").addEventListener("input", () => {
+    const val = $("billNo").value;
+    const warnEl = $("billNoWarning");
+    if (!val) { warnEl.textContent = ""; $("billNo").style.borderColor = ""; return; }
+    const dup = findDuplicateBill(val);
+    if (dup) {
+      warnEl.textContent = `⚠ Bill No. ${val} already exists — ${dup.StudentName}, ${dup.Date}`;
+      $("billNo").style.borderColor = "#A13D3D";
+    } else {
+      warnEl.textContent = "";
+      $("billNo").style.borderColor = "";
+    }
+  });
+
   // ---------- EDIT / DELETE ----------
   let editingBillRow = null;
   let editingExpenseRow = null;
@@ -753,6 +996,8 @@
     populateDropdowns();
     $("billSubmitBtn").textContent = "Add Bill";
     $("billCancelBtn").style.display = "none";
+    $("billNoWarning").textContent = "";
+    $("billNo").style.borderColor = "";
   }
 
   async function deleteBill(rowIndex) {
@@ -765,6 +1010,7 @@
       await fetchAllData();
       loadDay($("ledgerDate").value);
       generateReport();
+      renderTrendChart(trendMode);
     } catch (err) {
       alert("Could not delete, please try again");
     }
@@ -802,6 +1048,7 @@
       await fetchAllData();
       loadDay($("ledgerDate").value);
       generateReport();
+      renderTrendChart(trendMode);
     } catch (err) {
       alert("Could not delete, please try again");
     }
@@ -825,6 +1072,15 @@
   // ---------- FORM SUBMISSIONS ----------
   $("billForm").addEventListener("submit", async (e) => {
     e.preventDefault();
+
+    const dup = findDuplicateBill($("billNo").value);
+    if (dup) {
+      const proceed = confirm(
+        `Bill No. ${$("billNo").value} already exists for ${dup.StudentName} on ${dup.Date}.\n\nAdd it anyway?`
+      );
+      if (!proceed) return;
+    }
+
     const btn = $("billSubmitBtn"); btn.disabled = true;
     const statusEl = $("billStatus");
     const isEdit = editingBillRow !== null;
@@ -848,6 +1104,7 @@
       await fetchAllData();
       loadDay($("ledgerDate").value);
       generateReport();
+      renderTrendChart(trendMode);
     } catch (err) {
       statusEl.textContent = "Could not save, please try again";
       statusEl.className = "status-msg err";
@@ -879,6 +1136,7 @@
       await fetchAllData();
       loadDay($("ledgerDate").value);
       generateReport();
+      renderTrendChart(trendMode);
     } catch (err) {
       statusEl.textContent = "Could not save, please try again";
       statusEl.className = "status-msg err";
@@ -925,6 +1183,7 @@
     await fetchAllData();
     loadDay(todayStr());
     generateReport();
+    renderTrendChart("weekly");
   }
   init();
 </script>
