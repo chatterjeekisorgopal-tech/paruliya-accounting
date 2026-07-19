@@ -1,16 +1,26 @@
 /**
  * ================================
- * CONFIG - change this per center
+ * CONFIG - multi-center setup
  * ================================
- * If you resell this app to another center,
- * only this file needs to change. Nothing else.
+ * Each center has its OWN Google Sheet + its own Apps Script deployment.
+ * To add a third center later, copy one block inside CENTERS
+ * and fill in its own name + URL. Nothing else needs to change.
  */
 const CONFIG = {
-  CENTER_NAME: "Paruliya Youth Computer Training Center",
-  CENTER_NAME_SHORT: "Paruliya YCTC",
-
-  // Paste your Google Apps Script Web App URL here after deployment (Step 2)
-  WEB_APP_URL: "https://script.google.com/macros/s/AKfycbzTxTf4ycqkKq-RPDaR3ebU1q_ju6UlqvKTH5-oE73FKXcVY8HfEOkeeq7KFt9RyJoWnw/exec","https://script.google.com/macros/s/AKfycbwSPotGtbnW8DBWp3_8138AlCmj5_Pphm6DEwK9q1FeX-i9qatQfTQbU7ci4eFkI6s-/exec"
+  CENTERS: [
+    {
+      id: "paruliya",
+      CENTER_NAME: "Paruliya Youth Computer Training Center",
+      CENTER_NAME_SHORT: "Paruliya YCTC",
+      WEB_APP_URL: "https://script.google.com/macros/s/AKfycbzTxTf4ycqkKq-RPDaR3ebU1q_ju6U1qvKTH5-oE73FKXcVY8HfEOkeeq7KFt9RyJoWnw/exec"
+    },
+    {
+      id: "smartstudy",
+      CENTER_NAME: "Smart Study Youth Computer Education Centre",
+      CENTER_NAME_SHORT: "Smart Study YCEC",
+      WEB_APP_URL: "https://script.google.com/macros/s/AKfycbwSPotGtbnW8DBWp3_8138AlCmj5_Pphm6DEwK9q1FeX-i9qatQfTQbU7ci4eFkI6s-/exec"
+    }
+  ],
 
   COURSES: [
     "CITA",
