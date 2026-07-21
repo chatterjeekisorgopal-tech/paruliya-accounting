@@ -481,6 +481,93 @@
     </div>
   </section>
 
+  <h2 class="section-title">Student Management</h2>
+  <section class="panel" style="margin-bottom: 32px;">
+    <div class="panel-header">
+      Student Profiles
+      <span class="count" id="studentHeaderCount">0 students</span>
+    </div>
+    <form id="studentForm">
+      <div class="field-row">
+        <div>
+          <label for="stuRollNo">Roll No.</label>
+          <input type="text" id="stuRollNo" required>
+        </div>
+        <div>
+          <label for="stuName">Name</label>
+          <input type="text" id="stuName" required>
+        </div>
+      </div>
+      <div class="field-row">
+        <div>
+          <label for="stuFathersName">Father's Name</label>
+          <input type="text" id="stuFathersName">
+        </div>
+        <div>
+          <label for="stuCourse">Course</label>
+          <select id="stuCourse"></select>
+        </div>
+      </div>
+      <div class="field-row">
+        <div>
+          <label for="stuContact1">Contact No. 1</label>
+          <input type="text" id="stuContact1">
+        </div>
+        <div>
+          <label for="stuContact2">Contact No. 2</label>
+          <input type="text" id="stuContact2">
+        </div>
+      </div>
+      <div>
+        <label for="stuAddress">Address</label>
+        <input type="text" id="stuAddress">
+      </div>
+      <div class="field-row">
+        <div>
+          <label for="stuAdmissionDate">Admission Date</label>
+          <input type="date" id="stuAdmissionDate">
+        </div>
+        <div>
+          <label for="stuDueDate">Fee Due Date</label>
+          <input type="date" id="stuDueDate">
+        </div>
+      </div>
+      <div class="field-row">
+        <div>
+          <label for="stuTotalFees">Total Course Fees (₹)</label>
+          <input type="number" id="stuTotalFees" min="0" step="0.01">
+        </div>
+        <div>
+          <label for="stuMonthlyFees">Monthly Fees (₹)</label>
+          <input type="number" id="stuMonthlyFees" min="0" step="0.01">
+        </div>
+      </div>
+      <div>
+        <label for="stuOTP">One Time Payment / Admission Fee (₹)</label>
+        <input type="number" id="stuOTP" min="0" step="0.01">
+      </div>
+      <div style="display:flex; gap:8px;">
+        <button type="submit" id="studentSubmitBtn" style="flex:1;">Add Student</button>
+        <button type="button" id="studentCancelBtn" style="display:none; background:#8a8a8a;">Cancel</button>
+      </div>
+      <div class="status-msg" id="studentStatus"></div>
+    </form>
+    <div class="table-wrap" style="max-height:420px;">
+      <table>
+        <thead>
+          <tr>
+            <th>Roll No</th><th>Name</th><th>Course</th>
+            <th class="amount">Total Fees</th><th class="amount">Paid</th>
+            <th class="amount">Remaining</th><th>Status</th><th>Due Date</th><th>Actions</th>
+          </tr>
+        </thead>
+        <tbody id="studentTableBody">
+          <tr class="empty-row"><td colspan="9">No students added yet</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
   <h2 class="section-title">Today's Entries</h2>
   <section class="panels">
 
@@ -594,9 +681,10 @@
   const todayStr = () => new Date().toISOString().slice(0, 10);
   const inr = (n) => "₹" + Number(n || 0).toLocaleString("en-IN", { maximumFractionDigits: 2 });
 
-  // In-memory cache of all bills/expenses, refreshed after each fetch/submit
+  // In-memory cache of all bills/expenses/students, refreshed after each fetch/submit
   let ALL_BILLS = [];
   let ALL_EXPENSES = [];
+  let ALL_STUDENTS = [];
 
   // ---------- MULTI-CENTER ----------
   let currentCenterIndex = 0;
@@ -618,14 +706,17 @@
     populateDropdowns();
     $("studentSearchInput").value = "";
     searchByStudent();
+    cancelStudentEdit();
     await fetchAllData();
     loadDay($("ledgerDate").value);
     generateReport();
     renderTrendChart(trendMode);
+    renderStudents();
   }
 
   function populateDropdowns() {
     $("course").innerHTML = CONFIG.COURSES.map(c => `<option value="${c}">${c}</option>`).join("");
+    $("stuCourse").innerHTML = CONFIG.COURSES.map(c => `<option value="${c}">${c}</option>`).join("");
     $("paymentMode").innerHTML = CONFIG.PAYMENT_MODES.map(m => `<option value="${m}">${m}</option>`).join("");
     $("expCategory").innerHTML = CONFIG.EXPENSE_CATEGORIES.map(c => `<option value="${c}">${c}</option>`).join("");
     const center = getCurrentCenter();
@@ -642,17 +733,27 @@
 
   async function fetchAllData() {
     try {
-      const [bills, expenses] = await Promise.all([
+      const [bills, expenses, students] = await Promise.all([
         fetch(apiUrl({ action: "getBills" })).then(r => r.json()),
-        fetch(apiUrl({ action: "getExpenses" })).then(r => r.json())
+        fetch(apiUrl({ action: "getExpenses" })).then(r => r.json()),
+        fetch(apiUrl({ action: "getStudents" })).then(r => r.json())
       ]);
       ALL_BILLS = bills.map(b => ({ ...b, Date: String(b.Date).slice(0, 10) }));
       ALL_EXPENSES = expenses.map(x => ({ ...x, Date: String(x.Date).slice(0, 10) }));
+      ALL_STUDENTS = students;
+      $("billStatus").textContent = "";
       return true;
     } catch (err) {
       console.error(err);
-      $("billStatus").textContent = "Could not load data — check your Web App URL in config.js";
+      // IMPORTANT: clear old data so a failed center never silently shows the
+      // previous center's numbers. An empty/error state is safer than a wrong one.
+      ALL_BILLS = [];
+      ALL_EXPENSES = [];
+      ALL_STUDENTS = [];
+      const msg = `Could not load data for ${getCurrentCenter().CENTER_NAME_SHORT}. Check its Web App URL and deployment access (see console for details).`;
+      $("billStatus").textContent = msg;
       $("billStatus").className = "status-msg err";
+      alert(msg);
       return false;
     }
   }
@@ -945,6 +1046,150 @@
   $("trendWeeklyBtn").addEventListener("click", () => renderTrendChart("weekly"));
   $("trendMonthlyBtn").addEventListener("click", () => renderTrendChart("monthly"));
 
+  // ---------- STUDENT MANAGEMENT ----------
+  function computeStudentFeeStatus(student) {
+    const totalFees = Number(student.TotalCourseFees || 0);
+    const paid = ALL_BILLS
+      .filter(b => String(b.RollNo || "").trim() === String(student.RollNo || "").trim() && String(student.RollNo || "").trim() !== "")
+      .reduce((sum, b) => sum + Number(b.Amount || 0), 0);
+    const remaining = Math.max(totalFees - paid, 0);
+    const isComplete = totalFees > 0 && remaining <= 0;
+    return { totalFees, paid, remaining, isComplete };
+  }
+
+  function renderStudents() {
+    $("studentHeaderCount").textContent = ALL_STUDENTS.length + " students";
+    if (!ALL_STUDENTS.length) {
+      $("studentTableBody").innerHTML = `<tr class="empty-row"><td colspan="9">No students added yet</td></tr>`;
+      return;
+    }
+    $("studentTableBody").innerHTML = ALL_STUDENTS.map(s => {
+      const fee = computeStudentFeeStatus(s);
+      const statusHtml = fee.totalFees === 0
+        ? `<span style="color:var(--ink-soft);">—</span>`
+        : fee.isComplete
+          ? `<span style="color:var(--positive); font-weight:600;">✓ Complete</span>`
+          : `<span style="color:var(--negative); font-weight:600;">Due: ${inr(fee.remaining)}</span>`;
+      return `
+        <tr>
+          <td>${s.RollNo}</td>
+          <td>${s.Name}</td>
+          <td>${s.Course}</td>
+          <td class="amount">${inr(fee.totalFees)}</td>
+          <td class="amount">${inr(fee.paid)}</td>
+          <td class="amount">${inr(fee.remaining)}</td>
+          <td>${statusHtml}</td>
+          <td>${s.DueDate || ""}</td>
+          <td class="row-actions">
+            <button type="button" class="edit-student-btn" data-row="${s._row}">Edit</button>
+            <button type="button" class="delete-btn delete-student-btn" data-row="${s._row}">Delete</button>
+          </td>
+        </tr>
+      `;
+    }).join("");
+  }
+
+  let editingStudentRow = null;
+
+  function startEditStudent(rowIndex) {
+    const s = ALL_STUDENTS.find(x => String(x._row) === String(rowIndex));
+    if (!s) return;
+    editingStudentRow = rowIndex;
+    $("stuRollNo").value = s.RollNo;
+    $("stuName").value = s.Name;
+    $("stuFathersName").value = s.FathersName || "";
+    $("stuCourse").value = s.Course;
+    $("stuContact1").value = s.Contact1 || "";
+    $("stuContact2").value = s.Contact2 || "";
+    $("stuAddress").value = s.Address || "";
+    $("stuAdmissionDate").value = s.AdmissionDate || "";
+    $("stuDueDate").value = s.DueDate || "";
+    $("stuTotalFees").value = s.TotalCourseFees || "";
+    $("stuMonthlyFees").value = s.MonthlyFees || "";
+    $("stuOTP").value = s.OneTimePayment || "";
+    $("studentSubmitBtn").textContent = "Update Student";
+    $("studentCancelBtn").style.display = "block";
+    window.scrollTo({ top: $("studentForm").getBoundingClientRect().top + window.scrollY - 20, behavior: "smooth" });
+  }
+
+  function cancelStudentEdit() {
+    editingStudentRow = null;
+    $("studentForm").reset();
+    $("studentSubmitBtn").textContent = "Add Student";
+    $("studentCancelBtn").style.display = "none";
+  }
+
+  async function deleteStudent(rowIndex) {
+    if (!confirm("Delete this student profile? This cannot be undone.")) return;
+    try {
+      await fetch(getCurrentCenter().WEB_APP_URL, {
+        method: "POST",
+        body: JSON.stringify({ type: "deleteStudent", rowIndex: Number(rowIndex) })
+      });
+      await fetchAllData();
+      renderStudents();
+    } catch (err) {
+      alert("Could not delete, please try again");
+    }
+  }
+
+  $("studentTableBody").addEventListener("click", (e) => {
+    const editBtn = e.target.closest(".edit-student-btn");
+    const delBtn = e.target.closest(".delete-student-btn");
+    if (editBtn) startEditStudent(editBtn.dataset.row);
+    if (delBtn) deleteStudent(delBtn.dataset.row);
+  });
+  $("studentCancelBtn").addEventListener("click", cancelStudentEdit);
+
+  $("studentForm").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const btn = $("studentSubmitBtn"); btn.disabled = true;
+    const statusEl = $("studentStatus");
+    const isEdit = editingStudentRow !== null;
+    try {
+      await fetch(getCurrentCenter().WEB_APP_URL, {
+        method: "POST",
+        body: JSON.stringify({
+          type: isEdit ? "updateStudent" : "student",
+          rowIndex: isEdit ? Number(editingStudentRow) : undefined,
+          rollNo: $("stuRollNo").value,
+          name: $("stuName").value,
+          fathersName: $("stuFathersName").value,
+          contact1: $("stuContact1").value,
+          contact2: $("stuContact2").value,
+          address: $("stuAddress").value,
+          admissionDate: $("stuAdmissionDate").value,
+          course: $("stuCourse").value,
+          totalCourseFees: $("stuTotalFees").value,
+          monthlyFees: $("stuMonthlyFees").value,
+          oneTimePayment: $("stuOTP").value,
+          dueDate: $("stuDueDate").value
+        })
+      });
+      statusEl.textContent = isEdit ? "Student updated ✓" : "Student added ✓";
+      statusEl.className = "status-msg ok";
+      cancelStudentEdit();
+      await fetchAllData();
+      renderStudents();
+    } catch (err) {
+      statusEl.textContent = "Could not save, please try again";
+      statusEl.className = "status-msg err";
+    } finally {
+      btn.disabled = false;
+    }
+  });
+
+  // Auto-fill student name in the Bill form when a known Roll No is typed
+  $("rollNo").addEventListener("input", () => {
+    const val = $("rollNo").value.trim();
+    if (!val) return;
+    const match = ALL_STUDENTS.find(s => String(s.RollNo).trim() === val);
+    if (match && !$("studentName").value) {
+      $("studentName").value = match.Name;
+      if (match.Course) $("course").value = match.Course;
+    }
+  });
+
   // ---------- STUDENT SEARCH ----------
   function searchByStudent() {
     const query = $("studentSearchInput").value.trim().toLowerCase();
@@ -1228,6 +1473,7 @@
     loadDay(todayStr());
     generateReport();
     renderTrendChart("weekly");
+    renderStudents();
   }
   $("centerSwitcher").addEventListener("change", (e) => switchCenter(e.target.value));
   init();
