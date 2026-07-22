@@ -311,6 +311,7 @@
   }
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
 </head>
 <body>
 
@@ -487,6 +488,12 @@
       Student Profiles
       <span class="count" id="studentHeaderCount">0 students</span>
     </div>
+    <div style="padding:14px 18px; border-bottom:1px dashed var(--paper-line); display:flex; flex-wrap:wrap; gap:10px; align-items:center; background:#FBF8EF;">
+      <label for="csvImportInput" style="background:#3B4A6B; color:#fff; padding:9px 14px; border-radius:3px; font-weight:600; font-size:13.5px; cursor:pointer;">⬆ Bulk Import from CSV</label>
+      <input type="file" id="csvImportInput" accept=".csv" style="display:none;">
+      <button type="button" id="downloadTemplateBtn" style="background:#EFE9D8; color:var(--ink); border:1px solid #C9C0A8; padding:9px 14px; border-radius:3px; font-weight:600; font-size:13.5px; cursor:pointer;">⬇ Download CSV Template</button>
+      <span id="csvImportStatus" style="font-size:12.5px; color:var(--ink-soft);"></span>
+    </div>
     <form id="studentForm">
       <div class="field-row">
         <div>
@@ -565,6 +572,27 @@
           <tr class="empty-row"><td colspan="9">No students added yet</td></tr>
         </tbody>
       </table>
+    </div>
+  </section>
+
+  <h2 class="section-title">Total Due List</h2>
+  <section class="report-section">
+    <div class="panel-header">
+      Students with Pending Fees
+      <button type="button" id="exportDueListBtn" style="background:#3B4A6B; color:#fff; border:none; padding:8px 14px; border-radius:3px; font-weight:600; font-size:13px; cursor:pointer;">⬇ Export CSV</button>
+    </div>
+    <div class="report-body">
+      <div id="dueListSummary" style="font-size:13.5px; color:var(--ink-soft); margin-bottom:10px;"></div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th>Roll No</th><th>Name</th><th>Contact</th><th>Course</th><th class="amount">Total Fees</th><th class="amount">Paid</th><th class="amount">Due</th><th>Due Date</th></tr>
+          </thead>
+          <tbody id="dueListBody">
+            <tr class="empty-row"><td colspan="8">No pending dues</td></tr>
+          </tbody>
+        </table>
+      </div>
     </div>
   </section>
 
@@ -1061,6 +1089,7 @@
     $("studentHeaderCount").textContent = ALL_STUDENTS.length + " students";
     if (!ALL_STUDENTS.length) {
       $("studentTableBody").innerHTML = `<tr class="empty-row"><td colspan="9">No students added yet</td></tr>`;
+      renderDueList();
       return;
     }
     $("studentTableBody").innerHTML = ALL_STUDENTS.map(s => {
@@ -1087,7 +1116,136 @@
         </tr>
       `;
     }).join("");
+    renderDueList();
   }
+
+  // ---------- TOTAL DUE LIST ----------
+  let LAST_DUE_LIST = [];
+
+  function renderDueList() {
+    const dueStudents = ALL_STUDENTS
+      .map(s => ({ student: s, fee: computeStudentFeeStatus(s) }))
+      .filter(x => x.fee.totalFees > 0 && x.fee.remaining > 0)
+      .sort((a, b) => b.fee.remaining - a.fee.remaining);
+
+    LAST_DUE_LIST = dueStudents;
+
+    if (!dueStudents.length) {
+      $("dueListSummary").textContent = "No students with pending fees.";
+      $("dueListBody").innerHTML = `<tr class="empty-row"><td colspan="8">No pending dues</td></tr>`;
+      return;
+    }
+
+    const totalDue = dueStudents.reduce((sum, x) => sum + x.fee.remaining, 0);
+    $("dueListSummary").innerHTML = `<b>${dueStudents.length}</b> student(s) with pending fees — Total Due: <b>${inr(totalDue)}</b>`;
+
+    $("dueListBody").innerHTML = dueStudents.map(({ student: s, fee }) => `
+      <tr>
+        <td>${s.RollNo}</td>
+        <td>${s.Name}</td>
+        <td>${s.Contact1 || ""}</td>
+        <td>${s.Course}</td>
+        <td class="amount">${inr(fee.totalFees)}</td>
+        <td class="amount">${inr(fee.paid)}</td>
+        <td class="amount" style="color:var(--negative); font-weight:600;">${inr(fee.remaining)}</td>
+        <td>${s.DueDate || ""}</td>
+      </tr>
+    `).join("");
+  }
+
+  $("exportDueListBtn").addEventListener("click", () => {
+    if (!LAST_DUE_LIST.length) { alert("No pending dues to export."); return; }
+    const lines = [];
+    lines.push(`${getCurrentCenter().CENTER_NAME} - Total Due List`);
+    lines.push("");
+    lines.push(["Roll No", "Name", "Contact", "Course", "Total Fees", "Paid", "Due", "Due Date"].join(","));
+    LAST_DUE_LIST.forEach(({ student: s, fee }) => {
+      lines.push([s.RollNo, s.Name, s.Contact1, s.Course, fee.totalFees, fee.paid, fee.remaining, s.DueDate]
+        .map(csvEscape).join(","));
+    });
+    const blob = new Blob([lines.join("\n")], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${getCurrentCenter().CENTER_NAME_SHORT.replace(/\s+/g, "_")}_Due_List_${todayStr()}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  });
+
+  // ---------- CSV BULK IMPORT ----------
+  const CSV_TEMPLATE_HEADERS = ["RollNo", "Name", "FathersName", "Contact1", "Contact2", "Address", "AdmissionDate", "Course", "TotalCourseFees", "MonthlyFees", "OneTimePayment", "DueDate"];
+
+  $("downloadTemplateBtn").addEventListener("click", () => {
+    const sample = "101,Rishi Das,Ashok Das,9800000000,,Nabadwip,2026-07-01,CITA,5000,,500,2026-08-01";
+    const csv = CSV_TEMPLATE_HEADERS.join(",") + "\n" + sample;
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "student_import_template.csv";
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  });
+
+  $("csvImportInput").addEventListener("change", (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const statusEl = $("csvImportStatus");
+
+    Papa.parse(file, {
+      header: true,
+      skipEmptyLines: true,
+      complete: async (results) => {
+        const rows = results.data;
+        if (!rows.length) {
+          statusEl.textContent = "No rows found in this CSV.";
+          return;
+        }
+        statusEl.textContent = `Importing 0 / ${rows.length}...`;
+        let successCount = 0;
+        for (let i = 0; i < rows.length; i++) {
+          const r = rows[i];
+          if (!r.RollNo || !r.Name) continue; // skip incomplete rows
+          try {
+            await fetch(getCurrentCenter().WEB_APP_URL, {
+              method: "POST",
+              body: JSON.stringify({
+                type: "student",
+                rollNo: r.RollNo || "",
+                name: r.Name || "",
+                fathersName: r.FathersName || "",
+                contact1: r.Contact1 || "",
+                contact2: r.Contact2 || "",
+                address: r.Address || "",
+                admissionDate: r.AdmissionDate || "",
+                course: r.Course || "",
+                totalCourseFees: r.TotalCourseFees || "",
+                monthlyFees: r.MonthlyFees || "",
+                oneTimePayment: r.OneTimePayment || "",
+                dueDate: r.DueDate || ""
+              })
+            });
+            successCount++;
+          } catch (err) {
+            console.error("Import failed for row", i, err);
+          }
+          statusEl.textContent = `Importing ${i + 1} / ${rows.length}...`;
+        }
+        statusEl.textContent = `✓ Imported ${successCount} of ${rows.length} students.`;
+        await fetchAllData();
+        renderStudents();
+        e.target.value = "";
+      },
+      error: (err) => {
+        statusEl.textContent = "Could not read CSV file.";
+        console.error(err);
+      }
+    });
+  });
 
   let editingStudentRow = null;
 
