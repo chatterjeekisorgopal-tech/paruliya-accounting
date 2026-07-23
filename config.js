@@ -10,15 +10,15 @@ const CONFIG = {
   CENTERS: [
     {
       id: "paruliya",
-      CENTER_NAME: "Paruliya Youth Computer Training Center",
+      CENTER_NAME: "Paruliya Yuva Computer Training Center",
       CENTER_NAME_SHORT: "Paruliya YCTC",
-      WEB_APP_URL: "https://script.google.com/macros/s/AKfycbxciTM-s_pk-iglcZgMK_Cs7OqRUwsvoHQP7BTchu5-wwRO1DiCppTJBsokHwTdNZuj/exec"
+      WEB_APP_URL: "https://script.google.com/macros/s/AKfycbzTxTf4ycqkKq-RPDaR3ebU1q_ju6U1qvKTH5-oE73FKXcVY8HfEOkeeq7KFt9RyJoWnw/exec"
     },
     {
       id: "smartstudy",
       CENTER_NAME: "Smart Study Youth Computer Education Centre",
       CENTER_NAME_SHORT: "Smart Study YCEC",
-      WEB_APP_URL: "https://script.google.com/macros/s/AKfycbwSPotGtbnW8DBWp3_8138AlCmj5_Pphm6DEwK9q1FeX-i9qatQfTQbU7ci4eFkI6s-/exec"
+      WEB_APP_URL: "https://script.google.com/macros/s/AKfycbwSPotGtbnW8DBWpJ_8I38AlCmj5_Pphn6DEwK9q1FeX-i9qatQfTQbU7ci4eFkI6s-/exec"
     }
   ],
 
@@ -42,5 +42,13 @@ const CONFIG = {
     "Other"
   ],
 
-  PAYMENT_MODES: ["Cash", "UPI", "Bank Transfer"]
+  PAYMENT_MODES: ["Cash", "UPI", "Bank Transfer"],
+
+  REFERENCE_SOURCES: [
+    "Student Referral",
+    "Staff Referral",
+    "Facebook",
+    "Walk-in",
+    "Other"
+  ]
 };
