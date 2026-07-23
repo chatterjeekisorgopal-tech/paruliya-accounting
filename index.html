@@ -529,6 +529,10 @@
         <label for="stuAddress">Address</label>
         <input type="text" id="stuAddress">
       </div>
+      <div>
+        <label for="stuReference">Reference / Source</label>
+        <select id="stuReference"></select>
+      </div>
       <div class="field-row">
         <div>
           <label for="stuAdmissionDate">Admission Date</label>
@@ -545,6 +549,12 @@
           <input type="number" id="stuTotalFees" min="0" step="0.01">
         </div>
         <div>
+          <label for="stuFormCharge">Form Charge (₹)</label>
+          <input type="number" id="stuFormCharge" min="0" step="0.01" value="20">
+        </div>
+      </div>
+      <div class="field-row">
+        <div>
           <label for="stuMonthlyFees">Monthly Fees (₹)</label>
           <input type="number" id="stuMonthlyFees" min="0" step="0.01">
         </div>
@@ -552,6 +562,7 @@
       <div>
         <label for="stuOTP">One Time Payment / Admission Fee (₹)</label>
         <input type="number" id="stuOTP" min="0" step="0.01">
+        <div style="font-size:11.5px; color:var(--ink-soft); margin-top:3px;">This amount is automatically subtracted from Total Course Fees. For installment payments, add a Bill instead (Bills panel below) — that also subtracts automatically.</div>
       </div>
       <div style="display:flex; gap:8px;">
         <button type="submit" id="studentSubmitBtn" style="flex:1;">Add Student</button>
@@ -593,6 +604,59 @@
           </tbody>
         </table>
       </div>
+    </div>
+  </section>
+
+  <h2 class="section-title">Inquiry Tracker</h2>
+  <section class="panel" style="margin-bottom: 32px;">
+    <div class="panel-header">
+      Walk-in / Phone Inquiries
+      <span class="count" id="inquiryHeaderCount">0 inquiries</span>
+    </div>
+    <form id="inquiryForm">
+      <div class="field-row">
+        <div>
+          <label for="inqDate">Date</label>
+          <input type="date" id="inqDate" required>
+        </div>
+        <div>
+          <label for="inqName">Name</label>
+          <input type="text" id="inqName" required>
+        </div>
+      </div>
+      <div class="field-row">
+        <div>
+          <label for="inqPhone">Phone Number</label>
+          <input type="text" id="inqPhone">
+        </div>
+        <div>
+          <label for="inqCourse">Course Interested In</label>
+          <select id="inqCourse"></select>
+        </div>
+      </div>
+      <div>
+        <label for="inqAddress">Address</label>
+        <input type="text" id="inqAddress">
+      </div>
+      <div>
+        <label for="inqNotes">Notes</label>
+        <input type="text" id="inqNotes" placeholder="e.g. will decide after discussing at home, price sensitive, etc.">
+      </div>
+      <div style="display:flex; gap:8px;">
+        <button type="submit" id="inquirySubmitBtn" style="flex:1;">Add Inquiry</button>
+        <button type="button" id="inquiryCancelBtn" style="display:none; background:#8a8a8a;">Cancel</button>
+      </div>
+      <div class="status-msg" id="inquiryStatus"></div>
+    </form>
+    <div class="table-wrap" style="max-height:340px;">
+      <table>
+        <thead>
+          <tr><th>Date</th><th>Name</th><th>Phone</th><th>Course Interested</th><th>Notes</th><th>Actions</th></tr>
+        </thead>
+        <tbody id="inquiryTableBody">
+          <tr class="empty-row"><td colspan="6">No inquiries logged yet</td></tr>
+        </tbody>
+      </table>
     </div>
   </section>
 
@@ -709,10 +773,11 @@
   const todayStr = () => new Date().toISOString().slice(0, 10);
   const inr = (n) => "₹" + Number(n || 0).toLocaleString("en-IN", { maximumFractionDigits: 2 });
 
-  // In-memory cache of all bills/expenses/students, refreshed after each fetch/submit
+  // In-memory cache of all bills/expenses/students/inquiries, refreshed after each fetch/submit
   let ALL_BILLS = [];
   let ALL_EXPENSES = [];
   let ALL_STUDENTS = [];
+  let ALL_INQUIRIES = [];
 
   // ---------- MULTI-CENTER ----------
   let currentCenterIndex = 0;
@@ -740,11 +805,14 @@
     generateReport();
     renderTrendChart(trendMode);
     renderStudents();
+    renderInquiries();
   }
 
   function populateDropdowns() {
     $("course").innerHTML = CONFIG.COURSES.map(c => `<option value="${c}">${c}</option>`).join("");
     $("stuCourse").innerHTML = CONFIG.COURSES.map(c => `<option value="${c}">${c}</option>`).join("");
+    $("inqCourse").innerHTML = CONFIG.COURSES.map(c => `<option value="${c}">${c}</option>`).join("");
+    $("stuReference").innerHTML = CONFIG.REFERENCE_SOURCES.map(r => `<option value="${r}">${r}</option>`).join("");
     $("paymentMode").innerHTML = CONFIG.PAYMENT_MODES.map(m => `<option value="${m}">${m}</option>`).join("");
     $("expCategory").innerHTML = CONFIG.EXPENSE_CATEGORIES.map(c => `<option value="${c}">${c}</option>`).join("");
     const center = getCurrentCenter();
@@ -761,14 +829,16 @@
 
   async function fetchAllData() {
     try {
-      const [bills, expenses, students] = await Promise.all([
+      const [bills, expenses, students, inquiries] = await Promise.all([
         fetch(apiUrl({ action: "getBills" })).then(r => r.json()),
         fetch(apiUrl({ action: "getExpenses" })).then(r => r.json()),
-        fetch(apiUrl({ action: "getStudents" })).then(r => r.json())
+        fetch(apiUrl({ action: "getStudents" })).then(r => r.json()),
+        fetch(apiUrl({ action: "getInquiries" })).then(r => r.json())
       ]);
       ALL_BILLS = bills.map(b => ({ ...b, Date: String(b.Date).slice(0, 10) }));
       ALL_EXPENSES = expenses.map(x => ({ ...x, Date: String(x.Date).slice(0, 10) }));
       ALL_STUDENTS = students;
+      ALL_INQUIRIES = inquiries;
       $("billStatus").textContent = "";
       return true;
     } catch (err) {
@@ -778,6 +848,7 @@
       ALL_BILLS = [];
       ALL_EXPENSES = [];
       ALL_STUDENTS = [];
+      ALL_INQUIRIES = [];
       const msg = `Could not load data for ${getCurrentCenter().CENTER_NAME_SHORT}. Check its Web App URL and deployment access (see console for details).`;
       $("billStatus").textContent = msg;
       $("billStatus").className = "status-msg err";
@@ -1076,10 +1147,12 @@
 
   // ---------- STUDENT MANAGEMENT ----------
   function computeStudentFeeStatus(student) {
-    const totalFees = Number(student.TotalCourseFees || 0);
-    const paid = ALL_BILLS
+    const totalFees = Number(student.TotalCourseFees || 0) + Number(student.FormCharge || 0);
+    const billsPaid = ALL_BILLS
       .filter(b => String(b.RollNo || "").trim() === String(student.RollNo || "").trim() && String(student.RollNo || "").trim() !== "")
       .reduce((sum, b) => sum + Number(b.Amount || 0), 0);
+    const otpPaid = Number(student.OneTimePayment || 0);
+    const paid = billsPaid + otpPaid;
     const remaining = Math.max(totalFees - paid, 0);
     const isComplete = totalFees > 0 && remaining <= 0;
     return { totalFees, paid, remaining, isComplete };
@@ -1175,10 +1248,10 @@
   });
 
   // ---------- CSV BULK IMPORT ----------
-  const CSV_TEMPLATE_HEADERS = ["RollNo", "Name", "FathersName", "Contact1", "Contact2", "Address", "AdmissionDate", "Course", "TotalCourseFees", "MonthlyFees", "OneTimePayment", "DueDate"];
+  const CSV_TEMPLATE_HEADERS = ["RollNo", "Name", "FathersName", "Contact1", "Contact2", "Address", "Reference", "AdmissionDate", "Course", "TotalCourseFees", "FormCharge", "MonthlyFees", "OneTimePayment", "DueDate"];
 
   $("downloadTemplateBtn").addEventListener("click", () => {
-    const sample = "101,Rishi Das,Ashok Das,9800000000,,Nabadwip,2026-07-01,CITA,5000,,500,2026-08-01";
+    const sample = "101,Rishi Das,Ashok Das,9800000000,,Nabadwip,Referred by Suman,2026-07-01,CITA,5000,20,,500,2026-08-01";
     const csv = CSV_TEMPLATE_HEADERS.join(",") + "\n" + sample;
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
@@ -1221,9 +1294,11 @@
                 contact1: r.Contact1 || "",
                 contact2: r.Contact2 || "",
                 address: r.Address || "",
+                reference: r.Reference || "",
                 admissionDate: r.AdmissionDate || "",
                 course: r.Course || "",
                 totalCourseFees: r.TotalCourseFees || "",
+                formCharge: r.FormCharge || 20,
                 monthlyFees: r.MonthlyFees || "",
                 oneTimePayment: r.OneTimePayment || "",
                 dueDate: r.DueDate || ""
@@ -1260,9 +1335,11 @@
     $("stuContact1").value = s.Contact1 || "";
     $("stuContact2").value = s.Contact2 || "";
     $("stuAddress").value = s.Address || "";
+    $("stuReference").value = s.Reference || "";
     $("stuAdmissionDate").value = s.AdmissionDate || "";
     $("stuDueDate").value = s.DueDate || "";
     $("stuTotalFees").value = s.TotalCourseFees || "";
+    $("stuFormCharge").value = (s.FormCharge !== undefined && s.FormCharge !== "") ? s.FormCharge : 20;
     $("stuMonthlyFees").value = s.MonthlyFees || "";
     $("stuOTP").value = s.OneTimePayment || "";
     $("studentSubmitBtn").textContent = "Update Student";
@@ -1316,9 +1393,11 @@
           contact1: $("stuContact1").value,
           contact2: $("stuContact2").value,
           address: $("stuAddress").value,
+          reference: $("stuReference").value,
           admissionDate: $("stuAdmissionDate").value,
           course: $("stuCourse").value,
           totalCourseFees: $("stuTotalFees").value,
+          formCharge: $("stuFormCharge").value,
           monthlyFees: $("stuMonthlyFees").value,
           oneTimePayment: $("stuOTP").value,
           dueDate: $("stuDueDate").value
@@ -1345,6 +1424,108 @@
     if (match && !$("studentName").value) {
       $("studentName").value = match.Name;
       if (match.Course) $("course").value = match.Course;
+    }
+  });
+
+  // ---------- INQUIRY TRACKER ----------
+  function renderInquiries() {
+    $("inquiryHeaderCount").textContent = ALL_INQUIRIES.length + " inquiries";
+    if (!ALL_INQUIRIES.length) {
+      $("inquiryTableBody").innerHTML = `<tr class="empty-row"><td colspan="6">No inquiries logged yet</td></tr>`;
+      return;
+    }
+    const sorted = [...ALL_INQUIRIES].sort((a, b) => String(b.Date).localeCompare(String(a.Date)));
+    $("inquiryTableBody").innerHTML = sorted.map(x => `
+      <tr>
+        <td>${x.Date}</td>
+        <td>${x.Name}</td>
+        <td>${x.Phone || ""}</td>
+        <td>${x.CourseInterested || ""}</td>
+        <td>${x.Notes || ""}</td>
+        <td class="row-actions">
+          <button type="button" class="edit-inquiry-btn" data-row="${x._row}">Edit</button>
+          <button type="button" class="delete-btn delete-inquiry-btn" data-row="${x._row}">Delete</button>
+        </td>
+      </tr>
+    `).join("");
+  }
+
+  let editingInquiryRow = null;
+
+  function startEditInquiry(rowIndex) {
+    const x = ALL_INQUIRIES.find(i => String(i._row) === String(rowIndex));
+    if (!x) return;
+    editingInquiryRow = rowIndex;
+    $("inqDate").value = x.Date || "";
+    $("inqName").value = x.Name || "";
+    $("inqPhone").value = x.Phone || "";
+    $("inqCourse").value = x.CourseInterested || "";
+    $("inqAddress").value = x.Address || "";
+    $("inqNotes").value = x.Notes || "";
+    $("inquirySubmitBtn").textContent = "Update Inquiry";
+    $("inquiryCancelBtn").style.display = "block";
+    window.scrollTo({ top: $("inquiryForm").getBoundingClientRect().top + window.scrollY - 20, behavior: "smooth" });
+  }
+
+  function cancelInquiryEdit() {
+    editingInquiryRow = null;
+    $("inquiryForm").reset();
+    $("inqDate").value = todayStr();
+    $("inquirySubmitBtn").textContent = "Add Inquiry";
+    $("inquiryCancelBtn").style.display = "none";
+  }
+
+  async function deleteInquiry(rowIndex) {
+    if (!confirm("Delete this inquiry? This cannot be undone.")) return;
+    try {
+      await fetch(getCurrentCenter().WEB_APP_URL, {
+        method: "POST",
+        body: JSON.stringify({ type: "deleteInquiry", rowIndex: Number(rowIndex) })
+      });
+      await fetchAllData();
+      renderInquiries();
+    } catch (err) {
+      alert("Could not delete, please try again");
+    }
+  }
+
+  $("inquiryTableBody").addEventListener("click", (e) => {
+    const editBtn = e.target.closest(".edit-inquiry-btn");
+    const delBtn = e.target.closest(".delete-inquiry-btn");
+    if (editBtn) startEditInquiry(editBtn.dataset.row);
+    if (delBtn) deleteInquiry(delBtn.dataset.row);
+  });
+  $("inquiryCancelBtn").addEventListener("click", cancelInquiryEdit);
+
+  $("inquiryForm").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const btn = $("inquirySubmitBtn"); btn.disabled = true;
+    const statusEl = $("inquiryStatus");
+    const isEdit = editingInquiryRow !== null;
+    try {
+      await fetch(getCurrentCenter().WEB_APP_URL, {
+        method: "POST",
+        body: JSON.stringify({
+          type: isEdit ? "updateInquiry" : "inquiry",
+          rowIndex: isEdit ? Number(editingInquiryRow) : undefined,
+          date: $("inqDate").value,
+          name: $("inqName").value,
+          phone: $("inqPhone").value,
+          address: $("inqAddress").value,
+          courseInterested: $("inqCourse").value,
+          notes: $("inqNotes").value
+        })
+      });
+      statusEl.textContent = isEdit ? "Inquiry updated ✓" : "Inquiry saved ✓";
+      statusEl.className = "status-msg ok";
+      cancelInquiryEdit();
+      await fetchAllData();
+      renderInquiries();
+    } catch (err) {
+      statusEl.textContent = "Could not save, please try again";
+      statusEl.className = "status-msg err";
+    } finally {
+      btn.disabled = false;
     }
   });
 
@@ -1627,11 +1808,13 @@
     $("ledgerDate").value = todayStr();
     $("reportFrom").value = todayStr();
     $("reportTo").value = todayStr();
+    $("inqDate").value = todayStr();
     await fetchAllData();
     loadDay(todayStr());
     generateReport();
     renderTrendChart("weekly");
     renderStudents();
+    renderInquiries();
   }
   $("centerSwitcher").addEventListener("change", (e) => switchCenter(e.target.value));
   init();
